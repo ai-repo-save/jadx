@@ -64,3 +64,21 @@ Built launchers land in `build/jadx/bin/`. CI also sets `JADX_BUILD_JAVA_VERSION
 ### Lint / quality gates
 
 Quality checks run as part of `./gradlew build` (Spotless formatting, Checkstyle, Error Prone). There is no separate lint script beyond Gradle tasks.
+
+### MCP headless runtime
+
+Disk-backed code and usage caches live in `jadx-commons:jadx-app-commons` under `jadx.api.cache.*` (no Swing dependency). GUI continues to use the same APIs via `jadx-app-commons`.
+
+| Artifact | Path | Build command |
+|----------|------|---------------|
+| MCP runtime jar | `build/jadx/lib/jadx-mcp-runtime.jar` | `./gradlew :jadx-cli:packageMcpRuntime` |
+| Full dist (includes MCP jar) | `build/jadx/` | `./gradlew dist -x test` |
+
+**Downstream (jadx-mcp-java) integration:**
+
+- Use `jadx-mcp-runtime.jar` instead of `jadx-gui-*-all.jar` (~75 MB Swing fat jar).
+- Disk cache helpers: `jadx.api.cache.HeadlessCacheSupport`
+- Code cache: `jadx.api.cache.disk.DiskCodeCache`, `BufferCodeCache`
+- Usage cache: `jadx.api.cache.usage.UsageInfoCache` (equivalent to GUI `usage_cache=disk`)
+- SPI: jar merges all 11 CLI input plugins in `META-INF/services/jadx.api.plugins.JadxPlugin`
+- Logging: logback is excluded; provide `slf4j-simple` on the MCP classpath
