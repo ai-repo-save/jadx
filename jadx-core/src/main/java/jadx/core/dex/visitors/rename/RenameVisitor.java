@@ -269,6 +269,11 @@ public class RenameVisitor extends AbstractVisitor {
 	}
 
 	@Override
+	public boolean isClassTraversalNeeded() {
+		return false;
+	}
+
+	@Override
 	public String getName() {
 		return "RenameVisitor";
 	}

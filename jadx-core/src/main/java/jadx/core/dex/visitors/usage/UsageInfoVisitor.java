@@ -1,5 +1,6 @@
 package jadx.core.dex.visitors.usage;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
@@ -35,6 +36,7 @@ import jadx.core.dex.visitors.OverrideMethodVisitor;
 import jadx.core.dex.visitors.SignatureProcessor;
 import jadx.core.dex.visitors.rename.RenameVisitor;
 import jadx.core.utils.ListUtils;
+import jadx.core.utils.ParallelUtils;
 import jadx.core.utils.exceptions.JadxRuntimeException;
 import jadx.core.utils.input.InsnDataUtils;
 
@@ -76,10 +78,29 @@ public class UsageInfoVisitor extends AbstractVisitor {
 	}
 
 	private static IUsageInfoData buildUsageData(RootNode root) {
-		UsageInfo usageInfo = new UsageInfo(root);
-		for (ClassNode cls : root.getClasses()) {
-			processClass(cls, usageInfo);
+		List<ClassNode> classes = root.getClasses();
+		int threads = root.getArgs().getThreadsCount();
+		UsageInfo usageInfo;
+		if (threads <= 1 || classes.size() < ParallelUtils.MIN_ITEMS_FOR_PARALLEL) {
+			usageInfo = new UsageInfo(root);
+			for (ClassNode cls : classes) {
+				processClass(cls, usageInfo);
+			}
+		} else {
+			List<UsageInfo> partials = new ArrayList<>(classes.size());
+			ParallelUtils.forEach(classes, threads, cls -> {
+				UsageInfo partial = new UsageInfo(root);
+				processClass(cls, partial);
+				synchronized (partials) {
+					partials.add(partial);
+				}
+			});
+			usageInfo = new UsageInfo(root);
+			for (UsageInfo partial : partials) {
+				usageInfo.mergeFrom(partial);
+			}
 		}
+		usageInfo.applyCollectedFlags();
 		return usageInfo;
 	}
 
@@ -257,6 +278,11 @@ public class UsageInfoVisitor extends AbstractVisitor {
 		mergedUsage.remove(sourceMth);
 		mergeIntoMth.setUseIn(mergedUsage);
 		sourceMth.setUseIn(Collections.emptyList());
+	}
+
+	@Override
+	public boolean isClassTraversalNeeded() {
+		return false;
 	}
 
 	@Override

@@ -47,6 +47,11 @@ import jadx.core.utils.exceptions.JadxRuntimeException;
 public class OverrideMethodVisitor extends AbstractVisitor {
 
 	@Override
+	public boolean isParallelClassTraversal() {
+		return true;
+	}
+
+	@Override
 	public boolean visit(ClassNode cls) throws JadxException {
 		SuperTypesData superData = collectSuperTypes(cls);
 		if (superData != null) {

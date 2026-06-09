@@ -55,6 +55,7 @@ import jadx.core.export.GradleInfoStorage;
 import jadx.core.utils.CacheStorage;
 import jadx.core.utils.DebugChecks;
 import jadx.core.utils.ErrorsCounter;
+import jadx.core.utils.ParallelUtils;
 import jadx.core.utils.PassMerge;
 import jadx.core.utils.StringUtils;
 import jadx.core.utils.Utils;
@@ -377,11 +378,21 @@ public class RootNode {
 			} catch (Exception e) {
 				LOG.error("Visitor init failed: {}", pass.getClass().getSimpleName(), e);
 			}
-			for (ClassNode cls : classes) {
-				if (cls.isInner()) {
-					continue;
+			if (!pass.isClassTraversalNeeded()) {
+				continue;
+			}
+			if (pass.isParallelClassTraversal()) {
+				List<ClassNode> topLevelClasses = getClassesWithoutInner();
+				int threads = args.getThreadsCount();
+				ParallelUtils.forEachClass(topLevelClasses, threads,
+						cls -> DepthTraversal.visit(pass, cls));
+			} else {
+				for (ClassNode cls : classes) {
+					if (cls.isInner()) {
+						continue;
+					}
+					DepthTraversal.visit(pass, cls);
 				}
-				DepthTraversal.visit(pass, cls);
 			}
 			if (debugEnabled) {
 				LOG.debug("Prepare pass: '{}' - {}ms", pass, System.currentTimeMillis() - start);

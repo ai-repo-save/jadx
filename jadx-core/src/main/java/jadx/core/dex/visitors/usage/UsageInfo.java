@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
 import jadx.api.plugins.input.data.IMethodRef;
@@ -21,6 +22,7 @@ import jadx.core.dex.nodes.FieldNode;
 import jadx.core.dex.nodes.ICodeNode;
 import jadx.core.dex.nodes.MethodNode;
 import jadx.core.dex.nodes.RootNode;
+import jadx.core.utils.ParallelUtils;
 import jadx.core.utils.Utils;
 import jadx.core.utils.exceptions.JadxRuntimeException;
 
@@ -40,21 +42,60 @@ public class UsageInfo implements IUsageInfoData {
 	// MethodNodeA -> Set of IMethodRefs for methods that MethodNodeA calls that cannot be resolved
 	private final UseSet<MethodNode, IMethodRef> unresolvedMthUsage = new UseSet<>();
 	private final Map<MethodNode, Boolean> selfCalls = new HashMap<>();
+	private boolean useApacheHttpLegacy;
 
 	public UsageInfo(RootNode root) {
 		this.root = root;
 	}
 
+	public void mergeFrom(UsageInfo other) {
+		clsDeps.mergeFrom(other.clsDeps);
+		clsUsage.mergeFrom(other.clsUsage);
+		clsUseInMth.mergeFrom(other.clsUseInMth);
+		fieldUsage.mergeFrom(other.fieldUsage);
+		mthUsage.mergeFrom(other.mthUsage);
+		mthUses.mergeFrom(other.mthUses);
+		unresolvedMthUsage.mergeFrom(other.unresolvedMthUsage);
+		for (Map.Entry<MethodNode, Boolean> entry : other.selfCalls.entrySet()) {
+			if (entry.getValue()) {
+				selfCalls.put(entry.getKey(), true);
+			}
+		}
+		useApacheHttpLegacy |= other.useApacheHttpLegacy;
+	}
+
+	public void applyCollectedFlags() {
+		if (useApacheHttpLegacy) {
+			root.getGradleInfoStorage().setUseApacheHttpLegacy(true);
+		}
+	}
+
 	@Override
 	public void apply() {
-		clsDeps.visit((cls, deps) -> cls.setDependencies(sortedList(deps)));
-		clsUsage.visit((cls, deps) -> cls.setUseIn(sortedList(deps)));
-		clsUseInMth.visit((cls, methods) -> cls.setUseInMth(resolveMthList(sortedList(methods))));
-		fieldUsage.visit((field, methods) -> field.setUseIn(resolveMthList(sortedList(methods))));
-		mthUsage.visit((mth, methods) -> mth.setUseIn(resolveMthList(sortedList(methods))));
-		mthUses.visit((mth, methods) -> mth.setUsed(resolveMthList(sortedList(methods))));
-		unresolvedMthUsage.visit((mth, unresolvedMethods) -> mth.setUnresolvedUsed(new ArrayList<>(unresolvedMethods)));
-		selfCalls.forEach(MethodNode::setCallsSelf);
+		int threads = root.getArgs().getThreadsCount();
+		applyUseSet(clsDeps, threads, (cls, deps) -> cls.setDependencies(sortedList(deps)));
+		applyUseSet(clsUsage, threads, (cls, deps) -> cls.setUseIn(sortedList(deps)));
+		applyUseSet(clsUseInMth, threads, (cls, methods) -> cls.setUseInMth(resolveMthList(sortedList(methods))));
+		applyUseSet(fieldUsage, threads, (field, methods) -> field.setUseIn(resolveMthList(sortedList(methods))));
+		applyUseSet(mthUsage, threads, (mth, methods) -> mth.setUseIn(resolveMthList(sortedList(methods))));
+		applyUseSet(mthUses, threads, (mth, methods) -> mth.setUsed(resolveMthList(sortedList(methods))));
+		applyUseSet(unresolvedMthUsage, threads,
+				(mth, unresolvedMethods) -> mth.setUnresolvedUsed(new ArrayList<>(unresolvedMethods)));
+		applySelfCalls(threads);
+	}
+
+	private <K, V> void applyUseSet(UseSet<K, V> useSet, int threads, BiConsumer<K, Set<V>> action) {
+		List<Map.Entry<K, Set<V>>> entries = useSet.getEntries();
+		ParallelUtils.forEach(entries, threads, entry -> action.accept(entry.getKey(), entry.getValue()));
+	}
+
+	private void applySelfCalls(int threads) {
+		List<Map.Entry<MethodNode, Boolean>> entries = new ArrayList<>(selfCalls.entrySet());
+		ParallelUtils.forEach(entries, threads, entry -> {
+			if (entry.getValue()) {
+				entry.getKey().setCallsSelf(true);
+			}
+		});
 	}
 
 	@Override
@@ -198,7 +239,7 @@ public class UsageInfo implements IUsageInfoData {
 			// TODO: support custom handlers via API
 			ClspClass clsDetails = root.getClsp().getClsDetails(type);
 			if (clsDetails != null && clsDetails.getSource() == ClspClassSource.APACHE_HTTP_LEGACY_CLIENT) {
-				root.getGradleInfoStorage().setUseApacheHttpLegacy(true);
+				useApacheHttpLegacy = true;
 			}
 			ClassNode clsNode = root.resolveClass(type);
 			if (clsNode != null) {

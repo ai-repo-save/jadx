@@ -17,6 +17,11 @@ public class SaveDeobfMapping extends AbstractVisitor {
 	private static final Logger LOG = LoggerFactory.getLogger(SaveDeobfMapping.class);
 
 	@Override
+	public boolean isClassTraversalNeeded() {
+		return false;
+	}
+
+	@Override
 	public void init(RootNode root) throws JadxException {
 		JadxArgs args = root.getArgs();
 		if (args.isDeobfuscationOn() || !args.isJsonOutput()) {

@@ -31,6 +31,11 @@ public class SignatureProcessor extends AbstractVisitor {
 	}
 
 	@Override
+	public boolean isParallelClassTraversal() {
+		return true;
+	}
+
+	@Override
 	public boolean visit(ClassNode cls) throws JadxException {
 		parseClassSignature(cls);
 		for (FieldNode field : cls.getFields()) {
