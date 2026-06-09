@@ -31,6 +31,11 @@ public class DeobfuscatorVisitor extends AbstractVisitor {
 		process(root, renameCondition, aliasProvider);
 	}
 
+	@Override
+	public boolean isClassTraversalNeeded() {
+		return false;
+	}
+
 	public static void process(RootNode root, IRenameCondition renameCondition, IAliasProvider aliasProvider) {
 		boolean pkgUpdated = false;
 		for (PackageNode pkg : root.getPackages()) {

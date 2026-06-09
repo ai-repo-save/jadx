@@ -31,4 +31,20 @@ public interface IDexTreeVisitor {
 	 * Visit method
 	 */
 	void visit(MethodNode mth) throws JadxException;
+
+	/**
+	 * @return false if this visitor does all work in {@link #init(RootNode)} and class traversal can be
+	 *         skipped
+	 */
+	default boolean isClassTraversalNeeded() {
+		return true;
+	}
+
+	/**
+	 * @return true if top-level class visits are independent and can run in parallel (after
+	 *         {@link #init})
+	 */
+	default boolean isParallelClassTraversal() {
+		return false;
+	}
 }

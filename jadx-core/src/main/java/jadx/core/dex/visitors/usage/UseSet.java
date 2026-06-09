@@ -1,7 +1,9 @@
 package jadx.core.dex.visitors.usage;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.BiConsumer;
@@ -29,6 +31,17 @@ public class UseSet<K, V> {
 	public void visit(BiConsumer<K, Set<V>> consumer) {
 		for (Map.Entry<K, Set<V>> entry : useMap.entrySet()) {
 			consumer.accept(entry.getKey(), entry.getValue());
+		}
+	}
+
+	public List<Map.Entry<K, Set<V>>> getEntries() {
+		return new ArrayList<>(useMap.entrySet());
+	}
+
+	public void mergeFrom(UseSet<K, V> other) {
+		for (Map.Entry<K, Set<V>> entry : other.useMap.entrySet()) {
+			Set<V> set = useMap.computeIfAbsent(entry.getKey(), k -> new HashSet<>());
+			set.addAll(entry.getValue());
 		}
 	}
 }

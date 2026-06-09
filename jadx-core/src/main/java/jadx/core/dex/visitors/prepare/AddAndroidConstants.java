@@ -24,6 +24,11 @@ public class AddAndroidConstants extends AbstractVisitor {
 	private static final String R_INNER_CLS = R_CLS + '$';
 
 	@Override
+	public boolean isClassTraversalNeeded() {
+		return false;
+	}
+
+	@Override
 	public void init(RootNode root) throws JadxException {
 		if (!root.getArgs().isReplaceConsts()) {
 			return;

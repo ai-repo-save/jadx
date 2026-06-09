@@ -12,6 +12,7 @@ import jadx.core.dex.nodes.ClassNode;
 import jadx.core.dex.nodes.FieldNode;
 import jadx.core.dex.nodes.MethodNode;
 import jadx.core.dex.nodes.RootNode;
+import jadx.core.utils.ParallelUtils;
 import jadx.core.utils.Utils;
 import jadx.core.utils.exceptions.JadxRuntimeException;
 
@@ -29,13 +30,14 @@ class UsageData implements IUsageInfoData {
 	@Override
 	public void apply() {
 		Map<String, ClsUsageData> clsMap = rawUsageData.getClsMap();
-		for (ClassNode cls : root.getClasses()) {
-			String clsRawName = cls.getRawName();
-			ClsUsageData clsUsageData = clsMap.get(clsRawName);
+		List<ClassNode> classes = root.getClasses();
+		int threads = root.getArgs().getThreadsCount();
+		ParallelUtils.forEach(classes, threads, cls -> {
+			ClsUsageData clsUsageData = clsMap.get(cls.getRawName());
 			if (clsUsageData != null) {
 				applyForClass(clsUsageData, cls);
 			}
-		}
+		});
 	}
 
 	@Override
