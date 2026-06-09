@@ -2,6 +2,28 @@
 
 ## Cursor Cloud specific instructions
 
+### Repository layout
+
+This workspace is a **fork** of the upstream JADX project:
+
+| Remote | URL | Role |
+|--------|-----|------|
+| `origin` | `https://github.com/ai-repo-save/jadx` | This fork (push target) |
+| `upstream` | `https://github.com/skylot/jadx` | Official JADX repository |
+
+Default branch: `master` on both remotes.
+
+To sync upstream changes into the fork:
+
+```bash
+git fetch upstream master
+git checkout master
+git merge upstream/master
+git push origin master
+```
+
+Fork-only commits (e.g. `AGENTS.md`, local test fixtures) are preserved on top of upstream merges.
+
 ### Product overview
 
 JADX is a Dex-to-Java decompiler for Android. The repo ships a CLI (`jadx`) and a Swing desktop GUI (`jadx-gui`). There is no web server or Docker stack.
