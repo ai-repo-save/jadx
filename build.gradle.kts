@@ -138,6 +138,7 @@ dependencies {
 }
 
 val copyArtifacts by tasks.registering(Copy::class) {
+	dependsOn(":jadx-cli:packageMcpRuntime")
 	val jarCliPattern = "jadx-cli-(.*)-all.jar".toPattern()
 	from(tasks.getByPath(":jadx-cli:installShadowDist")) {
 		exclude("**/*.jar")
@@ -204,7 +205,7 @@ val dist by tasks.registering {
 	group = "jadx"
 	description = "Build jadx distribution zip bundles"
 
-	dependsOn(pack)
+	dependsOn(pack, ":jadx-cli:packageMcpRuntime")
 
 	val os = DefaultNativePlatform.getCurrentOperatingSystem()
 	if (os.isWindows) {

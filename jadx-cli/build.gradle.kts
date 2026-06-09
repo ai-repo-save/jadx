@@ -54,3 +54,49 @@ tasks.shadowJar {
 	// shadow jar not needed
 	configurations = listOf()
 }
+
+val mcpRuntimeExcludes =
+	listOf(
+		"jadx-gui",
+		"flatlaf",
+		"rsyntax",
+		"j2v8",
+		"graphviz",
+		"logback",
+	)
+
+val mcpRuntimeClasspath by configurations.creating {
+	isCanBeConsumed = false
+	isCanBeResolved = true
+	extendsFrom(configurations.getByName("runtimeClasspath"))
+}
+
+val packageMcpRuntime by tasks.registering(com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar::class) {
+	group = "jadx"
+	description = "Build headless runtime jar for MCP (no GUI/Swing)"
+
+	archiveBaseName.set("jadx-mcp-runtime")
+	archiveClassifier.set("")
+	archiveVersion.set("")
+
+	configurations = listOf(mcpRuntimeClasspath)
+	mergeServiceFiles()
+	duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+	isZip64 = true
+
+	dependencies {
+		exclude { details ->
+			val name = details.moduleName.lowercase()
+			mcpRuntimeExcludes.any { exclude -> name.contains(exclude) }
+		}
+	}
+
+	exclude("ch/qos/logback/**")
+	exclude("META-INF/*.SF", "META-INF/*.DSA", "META-INF/*.RSA", "META-INF/*.EC")
+
+	destinationDirectory.set(rootProject.layout.buildDirectory.dir("jadx/lib"))
+}
+
+tasks.test {
+	dependsOn(packageMcpRuntime)
+}
