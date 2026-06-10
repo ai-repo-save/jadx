@@ -2,6 +2,7 @@ package jadx.core.dex.visitors.regions.maker;
 
 import java.util.ArrayList;
 import java.util.BitSet;
+import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
@@ -104,7 +105,15 @@ final class IfRegionMaker {
 		stack.addExit(outBlock);
 
 		BlockNode thenBlock = currentIf.getThenBlock();
-		if (thenBlock == null) {
+		if (currentIf.isThenContinue()) {
+			Region thenReg = new Region(ifRegion);
+			thenReg.add(new InsnContainer(Collections.singletonList(new InsnNode(InsnType.CONTINUE, 0))));
+			ifRegion.setThenRegion(thenReg);
+		} else if (currentIf.isThenReturn() && thenBlock != null) {
+			Region thenReg = new Region(ifRegion);
+			thenReg.add(thenBlock);
+			ifRegion.setThenRegion(thenReg);
+		} else if (thenBlock == null) {
 			// empty then block, not normal, but maybe correct
 			ifRegion.setThenRegion(new Region(ifRegion));
 		} else {
@@ -179,6 +188,11 @@ final class IfRegionMaker {
 		IfInfo suspendIf = restructureCoroutineSuspendIf(info);
 		if (suspendIf != null) {
 			return suspendIf;
+		}
+
+		IfInfo loopContinueIf = restructureLoopContinueIf(info);
+		if (loopContinueIf != null) {
+			return loopContinueIf;
 		}
 
 		if (Objects.equals(thenBlock, elseBlock)) {
@@ -336,28 +350,93 @@ final class IfRegionMaker {
 		}
 		BlockNode thenBlock = info.getThenBlock();
 		BlockNode elseBlock = info.getElseBlock();
-		if (isCoroutineSuspendReturn(thenBlock) && isLoopContinueBranch(elseBlock)) {
-			IfInfo out = new IfInfo(info, thenBlock, null);
+		if (isCoroutineSuspendReturn(thenBlock) && isCoroutineLoopContinueBranch(elseBlock)) {
+			IfInfo out = new IfInfo(info, followEmptyPath(thenBlock), null);
+			out.setThenReturn(true);
 			out.setOutBlock(elseBlock);
 			return out;
 		}
-		if (isCoroutineSuspendReturn(elseBlock) && isLoopContinueBranch(thenBlock)) {
-			IfInfo out = new IfInfo(IfInfo.invert(info), elseBlock, null);
+		if (isCoroutineSuspendReturn(elseBlock) && isCoroutineLoopContinueBranch(thenBlock)) {
+			IfInfo out = new IfInfo(IfInfo.invert(info), followEmptyPath(elseBlock), null);
+			out.setThenReturn(true);
 			out.setOutBlock(thenBlock);
 			return out;
 		}
 		return null;
 	}
 
-	private static boolean isLoopContinueBranch(@Nullable BlockNode block) {
-		return block != null && block.contains(AFlag.LOOP_START);
+	/**
+	 * {@code if-nez cond, :loop_header} / fall-through body → {@code if (cond) { continue; }} body.
+	 */
+	private @Nullable IfInfo restructureLoopContinueIf(IfInfo info) {
+		BlockNode thenBlock = info.getThenBlock();
+		BlockNode elseBlock = info.getElseBlock();
+		if (isImmediateLoopContinueBranch(thenBlock) && !isImmediateLoopContinueBranch(elseBlock)) {
+			IfInfo out = new IfInfo(info, null, null);
+			out.setThenContinue(true);
+			out.setOutBlock(elseBlock);
+			return out;
+		}
+		if (isImmediateLoopContinueBranch(elseBlock) && !isImmediateLoopContinueBranch(thenBlock)) {
+			IfInfo out = new IfInfo(IfInfo.invert(info), null, null);
+			out.setThenContinue(true);
+			out.setOutBlock(thenBlock);
+			return out;
+		}
+		return null;
+	}
+
+	/** Suspend check branch: empty stub or header redirect, not a body that eventually loops. */
+	private boolean isCoroutineLoopContinueBranch(@Nullable BlockNode block) {
+		if (isImmediateLoopContinueBranch(block)) {
+			return true;
+		}
+		BlockNode target = followEmptyPath(block);
+		if (target != null && target.getInstructions().isEmpty()) {
+			for (BlockNode succ : target.getSuccessors()) {
+				if (isImmediateLoopContinueBranch(succ)) {
+					return true;
+				}
+			}
+		}
+		return false;
+	}
+
+	/** Branch that jumps straight to a loop header (no intermediate body). */
+	private boolean isImmediateLoopContinueBranch(@Nullable BlockNode block) {
+		if (block == null) {
+			return false;
+		}
+		BlockNode target = followEmptyPath(block);
+		if (target == null) {
+			return false;
+		}
+		if (target.contains(AFlag.LOOP_START)) {
+			return true;
+		}
+		if (!target.getInstructions().isEmpty()) {
+			return false;
+		}
+		for (BlockNode succ : target.getSuccessors()) {
+			BlockNode resolved = followEmptyPath(succ);
+			if (resolved != null && resolved.contains(AFlag.LOOP_START)) {
+				return true;
+			}
+		}
+		for (LoopInfo loop : mth.getLoops()) {
+			if (BlockUtils.resolvesToHeader(loop.getStart(), target)) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	private static boolean isCoroutineSuspendReturn(@Nullable BlockNode block) {
-		if (block == null || !block.contains(AFlag.RETURN)) {
+		BlockNode target = followEmptyPath(block);
+		if (target == null || !target.contains(AFlag.RETURN)) {
 			return false;
 		}
-		List<InsnNode> insns = block.getInstructions();
+		List<InsnNode> insns = target.getInstructions();
 		return insns.size() == 1 && insns.get(0).getType() == InsnType.RETURN;
 	}
 

@@ -72,6 +72,9 @@ public class TestTiktokStructuredDecompile extends SmaliTest {
 				.contains("outer:")
 				.contains("continue outer")
 				.contains("while (")
+				.containsPattern("if \\(c16gdLJ\\.LIZJ\\(.*\\) == objLJFF\\) \\{\\s*return objLJFF;")
+				.containsPattern("if \\(c16gdLJ2\\.LIZJ\\(.*\\) == objLJFF\\) \\{\\s*return objLJFF;")
+				.containsPattern("getBoolean\\(.*\\)\\) \\{\\s*continue;")
 				.doesNotContain("while (!it.hasNext())")
 				.contains("return objLJFF")
 				.contains("return ");
