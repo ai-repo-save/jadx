@@ -247,7 +247,6 @@ public final class TypeInferenceVisitor extends AbstractVisitor {
 				break;
 
 			case MOVE:
-			case MOVE_MULTI:
 				InsnArg moveSrc = insn.getArg(0);
 				if (moveSrc.isRegister()) {
 					ArgType srcImm = ((RegisterArg) moveSrc).getSVar().getImmutableType();
