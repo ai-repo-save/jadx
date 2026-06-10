@@ -20,13 +20,13 @@ import jadx.api.plugins.input.data.attributes.types.AnnotationMethodParamsAttr;
 import jadx.core.Consts;
 import jadx.core.Jadx;
 import jadx.core.codegen.kotlin.KotlinTypeGen;
+import jadx.core.codegen.lang.CodeLanguage;
 import jadx.core.codegen.utils.CodeGenUtils;
 import jadx.core.dex.attributes.AFlag;
 import jadx.core.dex.attributes.AType;
 import jadx.core.dex.attributes.nodes.DecompileModeOverrideAttr;
 import jadx.core.dex.attributes.nodes.JadxError;
 import jadx.core.dex.attributes.nodes.JumpInfo;
-import jadx.core.dex.attributes.nodes.MethodOverrideAttr;
 import jadx.core.dex.attributes.nodes.MethodReplaceAttr;
 import jadx.core.dex.attributes.nodes.SkipMethodArgsAttr;
 import jadx.core.dex.info.AccessInfo;
@@ -80,9 +80,10 @@ public class MethodGen {
 	}
 
 	public boolean addDefinition(ICodeWriter code) {
-		if (classGen.isKotlinOutput()) {
-			return addKotlinDefinition(code);
-		}
+		return classGen.getLang().addMethodDefinition(this, code);
+	}
+
+	public boolean addJavaDefinition(ICodeWriter code) {
 		if (mth.getMethodInfo().isClassInit()) {
 			code.startLine();
 			code.attachDefinition(mth);
@@ -98,7 +99,7 @@ public class MethodGen {
 		if (Consts.DEBUG_USAGE) {
 			ClassGen.addMthUsageInfo(code, mth);
 		}
-		addOverrideAnnotation(code, mth);
+		classGen.getLang().addOverride(this, code, mth);
 		annotationGen.addForMethod(code, mth);
 
 		AccessInfo clsAccFlags = mth.getParentClass().getAccessFlags();
@@ -154,7 +155,7 @@ public class MethodGen {
 		addMethodArguments(code);
 		code.add(')');
 
-		annotationGen.addThrows(mth, code);
+		classGen.getLang().addThrows(annotationGen, mth, code);
 
 		// add default value for annotation class
 		if (mth.getParentClass().getAccessFlags().isAnnotation()) {
@@ -167,7 +168,7 @@ public class MethodGen {
 		return true;
 	}
 
-	private boolean addKotlinDefinition(ICodeWriter code) {
+	public boolean addKotlinDefinition(ICodeWriter code) {
 		if (mth.getMethodInfo().isClassInit()) {
 			code.startLine();
 			code.attachDefinition(mth);
@@ -182,21 +183,12 @@ public class MethodGen {
 		if (Consts.DEBUG_USAGE) {
 			ClassGen.addMthUsageInfo(code, mth);
 		}
-		addOverrideAnnotation(code, mth);
+		classGen.getLang().addOverride(this, code, mth);
 		annotationGen.addForMethod(code, mth);
 
 		AccessInfo clsAccFlags = mth.getParentClass().getAccessFlags();
-		AccessInfo ai = mth.getAccessFlags();
-		if (classGen.isKotlinCompanionGen()) {
-			ai = ai.remove(AccessFlags.STATIC);
-		}
-		if (clsAccFlags.isInterface()) {
-			ai = ai.remove(AccessFlags.ABSTRACT);
-			ai = ai.remove(AccessFlags.PUBLIC);
-		}
-		if (clsAccFlags.isAnnotation()) {
-			ai = ai.remove(AccessFlags.PUBLIC);
-		}
+		CodeLanguage lang = classGen.getLang();
+		AccessInfo ai = lang.filterMethodAccess(mth.getAccessFlags(), classGen.isKotlinCompanionGen(), clsAccFlags);
 		if (mth.getMethodInfo().hasAlias() && !ai.isConstructor()) {
 			CodeGenUtils.addRenamedComment(code, mth, mth.getName());
 		}
@@ -217,6 +209,7 @@ public class MethodGen {
 
 		code.startLineWithNum(mth.getSourceLine());
 		if (!ai.isConstructor() || classGen.isKotlinCompanionGen()) {
+			code.add(lang.getMethodModifierPrefix(mth));
 			code.add(ai.makeString(mth.checkCommentsLevel(CommentsLevel.INFO)));
 		}
 
@@ -243,7 +236,7 @@ public class MethodGen {
 			}
 		}
 
-		annotationGen.addThrows(mth, code);
+		lang.addThrows(annotationGen, mth, code);
 
 		if (mth.getParentClass().getAccessFlags().isAnnotation()) {
 			EncodedValue def = annotationGen.getAnnotationDefaultValue(mth);
@@ -315,25 +308,6 @@ public class MethodGen {
 			return replaceAttr.getReplaceMth();
 		}
 		return mth;
-	}
-
-	private void addOverrideAnnotation(ICodeWriter code, MethodNode mth) {
-		MethodOverrideAttr overrideAttr = mth.get(AType.METHOD_OVERRIDE);
-		if (overrideAttr == null) {
-			return;
-		}
-		if (!overrideAttr.getBaseMethods().contains(mth)) {
-			code.startLine("@Override");
-			if (mth.checkCommentsLevel(CommentsLevel.INFO)) {
-				code.add(" // ");
-				code.add(Utils.listToString(overrideAttr.getOverrideList(), ", ",
-						md -> md.getMethodInfo().getDeclClass().getAliasFullName()));
-			}
-		}
-		if (Consts.DEBUG) {
-			code.startLine("// related by override: ");
-			code.add(Utils.listToString(overrideAttr.getRelatedMthNodes(), ", ", m -> m.getParentClass().getFullName()));
-		}
 	}
 
 	private void addMethodArguments(ICodeWriter code) {

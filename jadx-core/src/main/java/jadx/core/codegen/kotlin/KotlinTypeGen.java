@@ -26,6 +26,8 @@ public final class KotlinTypeGen {
 		if (stype == PrimitiveType.OBJECT) {
 			if (type.isGenericType()) {
 				code.add(type.getObject());
+			} else if (type.equals(ArgType.OBJECT) || "java.lang.Object".equals(type.getObject())) {
+				code.add("Any");
 			} else {
 				classGen.useClass(code, type);
 			}

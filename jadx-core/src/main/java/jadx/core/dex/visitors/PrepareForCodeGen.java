@@ -254,7 +254,7 @@ public class PrepareForCodeGen extends AbstractVisitor {
 	 * Otherwise, move to the top and add a warning.
 	 */
 	private void moveConstructorInConstructor(MethodNode mth) {
-		if (mth.root().getArgs().isKotlinOutput()) {
+		if (jadx.core.codegen.lang.CodeLanguages.from(mth.root()).preserveConstructorOrder()) {
 			return;
 		}
 		if (!mth.isConstructor()) {

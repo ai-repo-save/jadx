@@ -15,7 +15,6 @@ import jadx.api.plugins.input.data.attributes.JadxAttrType;
 import jadx.api.plugins.input.data.attributes.types.AnnotationDefaultAttr;
 import jadx.api.plugins.input.data.attributes.types.AnnotationMethodParamsAttr;
 import jadx.api.plugins.input.data.attributes.types.AnnotationsAttr;
-import jadx.core.Consts;
 import jadx.core.dex.attributes.IAttributeNode;
 import jadx.core.dex.info.FieldInfo;
 import jadx.core.dex.instructions.args.ArgType;
@@ -69,8 +68,7 @@ public class AnnotationGen {
 			return;
 		}
 		for (IAnnotation a : aList.getAll()) {
-			String aCls = a.getAnnotationClass();
-			if (!aCls.equals(Consts.OVERRIDE_ANNOTATION)) {
+			if (!classGen.getLang().shouldSkipAnnotation(a.getAnnotationClass())) {
 				code.startLine();
 				formatAnnotation(code, a);
 			}
