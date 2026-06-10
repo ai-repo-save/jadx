@@ -38,7 +38,7 @@ public class TernaryMod extends AbstractRegionVisitor implements IRegionIterativ
 			CodeShrinkVisitor.shrinkMethod(mth);
 			changed = true;
 		}
-		if (changed && mth.isConstructor()) {
+		if (changed && mth.isConstructor() && !mth.root().getArgs().isKotlinOutput()) {
 			// aggressive mode to help code inline before super call in constructor
 			// iterative runs with shrink after each change
 			DepthRegionTraversal.traverseIterative(mth, INSTANCE);

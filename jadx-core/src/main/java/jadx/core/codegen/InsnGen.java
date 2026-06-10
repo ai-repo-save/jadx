@@ -15,6 +15,8 @@ import jadx.api.metadata.annotations.InsnCodeOffset;
 import jadx.api.metadata.annotations.VarNode;
 import jadx.api.plugins.input.data.MethodHandleType;
 import jadx.api.plugins.input.data.annotations.EncodedValue;
+import jadx.core.codegen.kotlin.KotlinCodegen;
+import jadx.core.codegen.kotlin.KotlinTypeGen;
 import jadx.core.codegen.utils.CodeGenUtils;
 import jadx.core.dex.attributes.AFlag;
 import jadx.core.dex.attributes.AType;
@@ -86,6 +88,10 @@ public class InsnGen {
 		this.mth = mgen.getMethodNode();
 		this.root = mth.root();
 		this.fallback = fallback;
+	}
+
+	protected boolean isKotlinOutput() {
+		return KotlinCodegen.isKotlinOutput(root);
 	}
 
 	private boolean isFallback() {
@@ -318,11 +324,16 @@ public class InsnGen {
 				code.add(mth.root().getStringUtils().unescapeString(str));
 				break;
 
-			case CONST_CLASS:
+			case CONST_CLASS: {
 				ArgType clsType = ((ConstClassNode) insn).getClsType();
-				useType(code, clsType);
-				code.add(".class");
+				if (isKotlinOutput()) {
+					KotlinTypeGen.useClassLiteral(mgen.getClassGen(), code, clsType);
+				} else {
+					useType(code, clsType);
+					code.add(".class");
+				}
 				break;
+			}
 
 			case CONST:
 				LiteralArg arg = (LiteralArg) insn.getArg(0);
@@ -336,15 +347,27 @@ public class InsnGen {
 			case CHECK_CAST:
 			case CAST: {
 				boolean wrap = state.contains(Flags.BODY_ONLY);
-				if (wrap) {
+				if (isKotlinOutput()) {
+					if (wrap) {
+						code.add('(');
+					}
+					addArg(code, insn.getArg(0), true);
+					code.add(" as ");
+					useType(code, (ArgType) ((IndexInsnNode) insn).getIndex());
+					if (wrap) {
+						code.add(')');
+					}
+				} else {
+					if (wrap) {
+						code.add('(');
+					}
 					code.add('(');
-				}
-				code.add('(');
-				useType(code, (ArgType) ((IndexInsnNode) insn).getIndex());
-				code.add(") ");
-				addArg(code, insn.getArg(0), true);
-				if (wrap) {
-					code.add(')');
+					useType(code, (ArgType) ((IndexInsnNode) insn).getIndex());
+					code.add(") ");
+					addArg(code, insn.getArg(0), true);
+					if (wrap) {
+						code.add(')');
+					}
 				}
 				break;
 			}
@@ -411,7 +434,11 @@ public class InsnGen {
 					code.add('(');
 				}
 				addArg(code, insn.getArg(0));
-				code.add(" instanceof ");
+				if (isKotlinOutput()) {
+					code.add(" is ");
+				} else {
+					code.add(" instanceof ");
+				}
 				useType(code, (ArgType) ((IndexInsnNode) insn).getIndex());
 				if (wrap) {
 					code.add(')');
@@ -428,25 +455,36 @@ public class InsnGen {
 
 			case NEW_ARRAY: {
 				ArgType arrayType = ((NewArrayNode) insn).getArrayType();
-				code.add("new ");
-				useType(code, arrayType.getArrayRootElement());
-				int k = 0;
 				int argsCount = insn.getArgsCount();
-				for (; k < argsCount; k++) {
-					code.add('[');
-					addArg(code, insn.getArg(k), false);
-					code.add(']');
-				}
-				int dim = arrayType.getArrayDimension();
-				for (; k < dim; k++) {
-					code.add("[]");
+				if (isKotlinOutput()) {
+					KotlinTypeGen.emitNewArray(mgen.getClassGen(), code, arrayType, argsCount);
+					for (int k = 0; k < argsCount; k++) {
+						if (k != 0) {
+							code.add(", ");
+						}
+						addArg(code, insn.getArg(k), false);
+					}
+					code.add(')');
+				} else {
+					code.add("new ");
+					useType(code, arrayType.getArrayRootElement());
+					int k = 0;
+					for (; k < argsCount; k++) {
+						code.add('[');
+						addArg(code, insn.getArg(k), false);
+						code.add(']');
+					}
+					int dim = arrayType.getArrayDimension();
+					for (; k < dim; k++) {
+						code.add("[]");
+					}
 				}
 				break;
 			}
 
 			case ARRAY_LENGTH:
 				addArg(code, insn.getArg(0));
-				code.add(".length");
+				code.add(isKotlinOutput() ? ".size" : ".length");
 				break;
 
 			case FILLED_NEW_ARRAY:
@@ -708,10 +746,14 @@ public class InsnGen {
 
 	private void filledNewArray(FilledNewArrayNode insn, ICodeWriter code) throws CodegenException {
 		if (!insn.contains(AFlag.DECLARE_VAR)) {
-			code.add("new ");
-			useType(code, insn.getArrayType());
+			if (isKotlinOutput()) {
+				KotlinTypeGen.emitFilledArrayPrefix(code, insn.getArrayType());
+			} else {
+				code.add("new ");
+				useType(code, insn.getArrayType());
+			}
 		}
-		code.add('{');
+		code.add(isKotlinOutput() ? '(' : '{');
 		int c = insn.getArgsCount();
 		int wrap = 0;
 		for (int i = 0; i < c; i++) {
@@ -725,7 +767,7 @@ public class InsnGen {
 				wrap = 0;
 			}
 		}
-		code.add('}');
+		code.add(isKotlinOutput() ? ')' : '}');
 	}
 
 	private void makeConstructor(ConstructorInsn insn, ICodeWriter code) throws CodegenException {
@@ -754,7 +796,9 @@ public class InsnGen {
 			code.add("this");
 		} else {
 			boolean forceShortName = addOuterClassInstance(insn, code, callMth);
-			code.add("new ");
+			if (!isKotlinOutput()) {
+				code.add("new ");
+			}
 			if (refMth == null || refMth.contains(AFlag.DONT_GENERATE)) {
 				// use class reference if constructor method is missing (default constructor)
 				code.attachAnnotation(mth.root().resolveClass(insn.getCallMth().getDeclClass()));
@@ -825,7 +869,11 @@ public class InsnGen {
 			}
 		}
 		code.attachDefinition(cls);
-		code.add("new ");
+		if (isKotlinOutput()) {
+			code.add("object : ");
+		} else {
+			code.add("new ");
+		}
 		useClass(code, parent);
 		MethodNode callMth = mth.root().resolveMethod(insn.getCallMth());
 		if (callMth != null) {

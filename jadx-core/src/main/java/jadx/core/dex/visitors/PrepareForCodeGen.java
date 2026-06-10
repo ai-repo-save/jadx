@@ -254,6 +254,9 @@ public class PrepareForCodeGen extends AbstractVisitor {
 	 * Otherwise, move to the top and add a warning.
 	 */
 	private void moveConstructorInConstructor(MethodNode mth) {
+		if (mth.root().getArgs().isKotlinOutput()) {
+			return;
+		}
 		if (!mth.isConstructor()) {
 			return;
 		}
