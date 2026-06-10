@@ -424,12 +424,13 @@ public final class TypeUpdate {
 			TypeUtils typeUtils = root.getTypeUtils();
 			Set<ArgType> knownTypeVars = typeUtils.getKnownTypeVarsAtMethod(updateInfo.getMth());
 			Map<ArgType, ArgType> typeVarsMap = typeUtils.getTypeVariablesMapping(candidateType);
-			if (arg instanceof RegisterArg) {
+			if (arg instanceof RegisterArg
+					&& updateInfo.getFlags().isIgnoreSame()) {
 				SSAVar instVar = ((RegisterArg) arg).getSVar();
 				if (instVar.getImmutableType() != null
 						&& instVar.getAssign().contains(AFlag.METHOD_ARGUMENT)
 						&& typeVarsMap.isEmpty()) {
-					// concrete immutable method parameter: invoke already typed operands from signature
+					// setImmutableType path: skip generic back-prop from concrete method parameters
 					return CHANGED;
 				}
 			}
