@@ -26,6 +26,8 @@ import jadx.api.plugins.input.data.annotations.EncodedType;
 import jadx.api.plugins.input.data.annotations.EncodedValue;
 import jadx.api.plugins.input.data.attributes.JadxAttrType;
 import jadx.core.Consts;
+import jadx.core.codegen.kotlin.KotlinCodegen;
+import jadx.core.codegen.kotlin.KotlinTypeGen;
 import jadx.core.codegen.utils.CodeGenUtils;
 import jadx.core.dex.attributes.AFlag;
 import jadx.core.dex.attributes.AType;
@@ -68,6 +70,8 @@ public class ClassGen {
 
 	private boolean bodyGenStarted;
 
+	private boolean kotlinCompanionGen;
+
 	@Nullable
 	private NameGen outerNameGen;
 
@@ -94,6 +98,14 @@ public class ClassGen {
 
 	public ClassNode getClassNode() {
 		return cls;
+	}
+
+	public boolean isKotlinOutput() {
+		return KotlinCodegen.isKotlinOutput(cls.root());
+	}
+
+	public boolean isKotlinCompanionGen() {
+		return kotlinCompanionGen;
 	}
 
 	public ICodeInfo makeClass() throws CodegenException {
@@ -185,7 +197,7 @@ public class ClassGen {
 			}
 			clsCode.add("interface ");
 		} else if (af.isEnum()) {
-			clsCode.add("enum ");
+			clsCode.add(isKotlinOutput() ? "enum class " : "enum ");
 		} else {
 			clsCode.add("class ");
 		}
@@ -196,6 +208,14 @@ public class ClassGen {
 		clsCode.add(' ');
 
 		ArgType sup = cls.getSuperClass();
+		if (isKotlinOutput()) {
+			addKotlinSupertypes(clsCode, af, sup);
+		} else {
+			addJavaSupertypes(clsCode, af, sup);
+		}
+	}
+
+	private void addJavaSupertypes(ICodeWriter clsCode, AccessInfo af, ArgType sup) {
 		if (sup != null
 				&& !sup.equals(ArgType.OBJECT)
 				&& !cls.contains(AFlag.REMOVE_SUPER_CLASS)) {
@@ -223,6 +243,33 @@ public class ClassGen {
 		}
 	}
 
+	private void addKotlinSupertypes(ICodeWriter clsCode, AccessInfo af, ArgType sup) {
+		boolean first = true;
+		if (sup != null
+				&& !sup.equals(ArgType.OBJECT)
+				&& !cls.contains(AFlag.REMOVE_SUPER_CLASS)
+				&& !af.isInterface()
+				&& !af.isEnum()) {
+			clsCode.add(": ");
+			useClass(clsCode, sup);
+			first = false;
+		}
+		if (!cls.getInterfaces().isEmpty() && !af.isAnnotation()) {
+			for (ArgType interf : cls.getInterfaces()) {
+				if (first) {
+					clsCode.add(": ");
+					first = false;
+				} else {
+					clsCode.add(", ");
+				}
+				useClass(clsCode, interf);
+			}
+			if (!first) {
+				clsCode.add(' ');
+			}
+		}
+	}
+
 	public boolean addGenericTypeParameters(ICodeWriter code, List<ArgType> generics, boolean classDeclaration) {
 		if (generics == null || generics.isEmpty()) {
 			return false;
@@ -240,7 +287,7 @@ public class ClassGen {
 			}
 			List<ArgType> list = genericInfo.getExtendTypes();
 			if (list != null && !list.isEmpty()) {
-				code.add(" extends ");
+				code.add(isKotlinOutput() ? " : " : " extends ");
 				for (Iterator<ArgType> it = list.iterator(); it.hasNext();) {
 					ArgType g = it.next();
 					if (g.isGenericType()) {
@@ -273,6 +320,10 @@ public class ClassGen {
 	 *                       classes)
 	 */
 	public void addClassBody(ICodeWriter clsCode, boolean printClassName) throws CodegenException {
+		if (isKotlinOutput()) {
+			addKotlinClassBody(clsCode, printClassName);
+			return;
+		}
 		clsCode.add('{');
 		if (printClassName && cls.checkCommentsLevel(CommentsLevel.INFO)) {
 			clsCode.add(" // from class: " + cls.getClassInfo().getFullName());
@@ -285,6 +336,78 @@ public class ClassGen {
 		clsCode.decIndent();
 		clsCode.startLine('}');
 		clsCode.attachAnnotation(NodeEnd.VALUE);
+	}
+
+	private void addKotlinClassBody(ICodeWriter clsCode, boolean printClassName) throws CodegenException {
+		clsCode.add('{');
+		if (printClassName && cls.checkCommentsLevel(CommentsLevel.INFO)) {
+			clsCode.add(" // from class: " + cls.getClassInfo().getFullName());
+		}
+		setBodyGenStarted(true);
+		clsDeclOffset = clsCode.getLength();
+		clsCode.incIndent();
+		addEnumFields(clsCode);
+		for (FieldNode f : cls.getFields()) {
+			if (!f.getAccessFlags().isStatic()) {
+				addField(clsCode, f);
+			}
+		}
+		addKotlinInstanceMembers(clsCode);
+		addKotlinCompanion(clsCode);
+		clsCode.decIndent();
+		clsCode.startLine('}');
+		clsCode.attachAnnotation(NodeEnd.VALUE);
+	}
+
+	private void addKotlinInstanceMembers(ICodeWriter clsCode) {
+		Stream.of(cls.getInnerClasses(), cls.getMethods())
+				.flatMap(Collection::stream)
+				.filter(node -> !skipNode(node))
+				.filter(node -> !(node instanceof MethodNode) || isKotlinInstanceMethod((MethodNode) node))
+				.sorted(Comparator.comparingInt(LineAttrNode::getSourceLine))
+				.forEach(node -> {
+					if (node instanceof ClassNode) {
+						addInnerClass(clsCode, (ClassNode) node);
+					} else {
+						addMethod(clsCode, (MethodNode) node);
+					}
+				});
+	}
+
+	private boolean isKotlinInstanceMethod(MethodNode mth) {
+		if (mth.getMethodInfo().isClassInit()) {
+			return false;
+		}
+		return !mth.getAccessFlags().isStatic();
+	}
+
+	private void addKotlinCompanion(ICodeWriter clsCode) throws CodegenException {
+		boolean hasStaticFields = cls.getFields().stream()
+				.anyMatch(f -> !skipNode(f) && f.getAccessFlags().isStatic());
+		boolean hasStaticMethods = cls.getMethods().stream()
+				.anyMatch(m -> !skipNode(m) && (m.getMethodInfo().isClassInit() || m.getAccessFlags().isStatic()));
+		if (!hasStaticFields && !hasStaticMethods) {
+			return;
+		}
+		if (clsCode.getLength() != clsDeclOffset) {
+			clsCode.newLine();
+		}
+		clsCode.startLine("companion object {");
+		clsCode.incIndent();
+		kotlinCompanionGen = true;
+		for (FieldNode f : cls.getFields()) {
+			if (f.getAccessFlags().isStatic()) {
+				addField(clsCode, f);
+			}
+		}
+		cls.getMethods().stream()
+				.filter(m -> !skipNode(m))
+				.filter(m -> m.getMethodInfo().isClassInit() || m.getAccessFlags().isStatic())
+				.sorted(Comparator.comparingInt(LineAttrNode::getSourceLine))
+				.forEach(m -> addMethod(clsCode, m));
+		kotlinCompanionGen = false;
+		clsCode.decIndent();
+		clsCode.startLine("}");
 	}
 
 	private void addInnerClsAndMethods(ICodeWriter clsCode) {
@@ -400,7 +523,9 @@ public class ClassGen {
 		if (mth.isNoCode()) {
 			MethodGen mthGen = new MethodGen(this, mth);
 			mthGen.addDefinition(code);
-			code.add(';');
+			if (!isKotlinOutput()) {
+				code.add(';');
+			}
 		} else {
 			boolean badCode = mth.contains(AFlag.INCONSISTENT_CODE);
 			if (badCode && showInconsistentCode) {
@@ -450,11 +575,23 @@ public class ClassGen {
 		}
 		annotationGen.addForField(code, f);
 
-		code.startLine(f.getAccessFlags().makeString(f.checkCommentsLevel(CommentsLevel.INFO)));
-		useType(code, f.getType());
-		code.add(' ');
-		code.attachDefinition(f);
-		code.add(f.getAlias());
+		AccessInfo fieldAccess = f.getAccessFlags();
+		if (isKotlinOutput() && kotlinCompanionGen) {
+			fieldAccess = fieldAccess.remove(AccessFlags.STATIC);
+		}
+		code.startLine(fieldAccess.makeString(f.checkCommentsLevel(CommentsLevel.INFO)));
+		if (isKotlinOutput()) {
+			code.add("var ");
+			code.attachDefinition(f);
+			code.add(f.getAlias());
+			code.add(": ");
+			useType(code, f.getType());
+		} else {
+			useType(code, f.getType());
+			code.add(' ');
+			code.attachDefinition(f);
+			code.add(f.getAlias());
+		}
 
 		FieldInitInsnAttr initInsnAttr = f.get(AType.FIELD_INIT_INSN);
 		if (initInsnAttr != null) {
@@ -478,7 +615,9 @@ public class ClassGen {
 				}
 			}
 		}
-		code.add(';');
+		if (!isKotlinOutput()) {
+			code.add(';');
+		}
 	}
 
 	private String getIntegerString(long lit, ArgType type) {
@@ -561,6 +700,10 @@ public class ClassGen {
 	}
 
 	public void useType(ICodeWriter code, ArgType type) {
+		if (isKotlinOutput()) {
+			KotlinTypeGen.useType(this, code, type);
+			return;
+		}
 		PrimitiveType stype = type.getPrimitiveType();
 		if (stype == null) {
 			code.add(type.toString());
