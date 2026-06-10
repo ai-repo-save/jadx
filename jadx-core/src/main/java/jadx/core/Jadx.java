@@ -34,6 +34,7 @@ import jadx.core.dex.visitors.FixSwitchOverEnum;
 import jadx.core.dex.visitors.GenericTypesVisitor;
 import jadx.core.dex.visitors.IDexTreeVisitor;
 import jadx.core.dex.visitors.InitCodeVariables;
+import jadx.core.dex.visitors.kotlin.coroutine.KotlinCoroutineVisitor;
 import jadx.core.dex.visitors.InlineMethods;
 import jadx.core.dex.visitors.MarkMethodsForInline;
 import jadx.core.dex.visitors.MethodInvokeVisitor;
@@ -179,6 +180,7 @@ public class Jadx {
 		}
 
 		// regions IR
+		passes.add(new KotlinCoroutineVisitor());
 		passes.add(new StructuredRegionMakerVisitor());
 		passes.add(new RegionMakerVisitor());
 		passes.add(new IfRegionVisitor());

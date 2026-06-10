@@ -15,12 +15,12 @@ import jadx.core.dex.attributes.AFlag;
 import jadx.core.dex.attributes.AType;
 import jadx.core.dex.attributes.nodes.LoopInfo;
 import jadx.core.dex.attributes.nodes.LoopLabelAttr;
+import jadx.core.dex.attributes.nodes.KotlinCoroutineAttr;
 import jadx.core.dex.attributes.nodes.StructuredCoroutineAttr;
 import jadx.core.dex.instructions.IfNode;
 import jadx.core.dex.instructions.InsnType;
 import jadx.core.dex.nodes.BlockNode;
 import jadx.core.dex.nodes.InsnNode;
-import jadx.core.dex.nodes.Edge;
 import jadx.core.dex.nodes.MethodNode;
 import jadx.core.dex.regions.Region;
 import jadx.core.dex.regions.structured.CoroutineDispatchRegion;
@@ -34,6 +34,10 @@ public final class StructuredRegionBuilder {
 	}
 
 	public static @Nullable Region build(MethodNode mth) {
+		KotlinCoroutineAttr coroutine = mth.get(AType.KOTLIN_COROUTINE);
+		if (coroutine == null) {
+			return null;
+		}
 		GraphShapeClassifier.Component component = CoroutinePatternDetector.findPrimaryMultiEntryComponent(mth);
 		if (component == null || !matchesSharedLoopShape(component)) {
 			return null;
@@ -61,14 +65,16 @@ public final class StructuredRegionBuilder {
 		List<BlockNode> postLoopBlocks = collectPostLoopBlocks(mth, componentBlocks, outerHeader);
 		Set<BlockNode> postLoopSet = new HashSet<>(postLoopBlocks);
 		List<BlockNode> preambleBlocks = collectPreambleBlocks(mth, componentBlocks, postLoopSet);
-		Map<Integer, BlockNode> resumeEntryByLabel = collectResumeEntries(component, outerHeader, innerHeader);
+		Map<Integer, BlockNode> resumeEntryByLabel = coroutine.getLabelToResumeBlock();
+		Integer innerResumeLabel = findLabelForHeader(resumeEntryByLabel, innerHeader);
+		Integer outerResumeLabel = findLabelForHeader(resumeEntryByLabel, outerHeader);
 
 		StructuredCoroutineAttr attr = new StructuredCoroutineAttr(
 				outerHeader,
 				innerHeader,
 				innerExitToOuter,
-				resumeEntryByLabel.get(2),
-				resumeEntryByLabel.get(3),
+				innerResumeLabel != null ? resumeEntryByLabel.get(innerResumeLabel) : null,
+				outerResumeLabel != null ? resumeEntryByLabel.get(outerResumeLabel) : null,
 				preambleBlocks,
 				resumeEntryByLabel,
 				postLoopBlocks);
@@ -156,24 +162,14 @@ public final class StructuredRegionBuilder {
 		return null;
 	}
 
-	private static Map<Integer, BlockNode> collectResumeEntries(
-			GraphShapeClassifier.Component component,
-			BlockNode outerHeader,
-			BlockNode innerHeader) {
-		Map<Integer, BlockNode> resumeEntryByLabel = new java.util.HashMap<>();
-		for (Edge entry : component.getEntries()) {
-			BlockNode source = entry.getSource();
-			if (source.getStartOffset() == -1) {
-				continue;
-			}
-			BlockNode target = BlockUtils.followEmptyPath(entry.getTarget());
-			if (target == innerHeader) {
-				resumeEntryByLabel.put(2, source);
-			} else if (target == outerHeader) {
-				resumeEntryByLabel.put(3, source);
+	private static @Nullable Integer findLabelForHeader(Map<Integer, BlockNode> resumeEntryByLabel, BlockNode header) {
+		for (Map.Entry<Integer, BlockNode> entry : resumeEntryByLabel.entrySet()) {
+			BlockNode target = BlockUtils.followEmptyPath(entry.getValue());
+			if (target == header || BlockUtils.resolvesToHeader(header, target)) {
+				return entry.getKey();
 			}
 		}
-		return resumeEntryByLabel;
+		return null;
 	}
 
 	private static List<BlockNode> collectPreambleBlocks(
