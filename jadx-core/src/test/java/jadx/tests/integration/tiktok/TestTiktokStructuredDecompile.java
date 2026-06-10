@@ -4,6 +4,7 @@ import java.io.File;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
 import org.junit.jupiter.api.Test;
@@ -13,6 +14,8 @@ import jadx.core.dex.attributes.AType;
 import jadx.core.dex.nodes.ClassNode;
 import jadx.core.dex.nodes.MethodNode;
 import jadx.core.dex.nodes.RootNode;
+import jadx.core.dex.regions.structured.MultiEntryLoopRegion;
+import jadx.core.utils.RegionUtils;
 import jadx.tests.api.SmaliTest;
 
 import static jadx.tests.api.utils.assertj.JadxAssertions.assertThat;
@@ -26,6 +29,19 @@ public class TestTiktokStructuredDecompile extends SmaliTest {
 		MethodNode mth = loadProcessedTargetMethod();
 		assertThat(mth.contains(AType.STRUCTURED_COROUTINE)).isTrue();
 		assertThat(mth.getRegion()).isNotNull();
+		AtomicReference<MultiEntryLoopRegion> loopRegion = new AtomicReference<>();
+		RegionUtils.visitRegions(mth, mth.getRegion(), region -> {
+			if (region instanceof MultiEntryLoopRegion) {
+				loopRegion.set((MultiEntryLoopRegion) region);
+				return false;
+			}
+			return true;
+		});
+		assertThat(loopRegion.get()).isNotNull();
+		assertThat(loopRegion.get().getOuterBodyRegion().getSubBlocks().size()
+				+ loopRegion.get().getInnerBodyRegion().getSubBlocks().size())
+				.as("structured loop body regions")
+				.isGreaterThan(0);
 	}
 
 	@Test
@@ -42,10 +58,13 @@ public class TestTiktokStructuredDecompile extends SmaliTest {
 		root.getProcessClasses().generateCode(cls);
 
 		String code = cls.getCode().getCodeStr();
-		// Structured path must avoid RegionMaker overflow; full clean codegen is still WIP.
 		assertThat(code)
 				.doesNotContain("JadxOverflowException")
-				.doesNotContain("Regions count limit reached");
+				.doesNotContain("Regions count limit reached")
+				.doesNotContain("UnsupportedOperationException(\"Method not decompiled")
+				.doesNotContain("Method dump skipped")
+				.contains("outer:")
+				.contains("continue outer");
 	}
 
 	private MethodNode loadProcessedTargetMethod() {
