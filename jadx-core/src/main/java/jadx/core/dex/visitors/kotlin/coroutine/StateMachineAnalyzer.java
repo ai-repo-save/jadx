@@ -48,7 +48,7 @@ public final class StateMachineAnalyzer {
 		if (mth.isNoCode() || mth.getBasicBlocks().isEmpty()) {
 			return "no-code";
 		}
-		if (findSuspendedMarkerInsn(mth) == null) {
+		if (findCoroutineSuspendedMarkerInsn(mth) == null) {
 			return "no-suspended-marker";
 		}
 		if (findLabelField(mth) == null) {
@@ -62,8 +62,9 @@ public final class StateMachineAnalyzer {
 		if (parseLabelDispatch(mth, dispatch, labelField).isEmpty()) {
 			return "empty-label-dispatch";
 		}
-		InsnNode suspended = findSuspendedMarkerInsn(mth);
-		if (collectSuspendPoints(mth, labelField, suspended.getResult()).isEmpty()) {
+		InsnNode suspended = findCoroutineSuspendedMarkerInsn(mth);
+		if (suspended == null || suspended.getResult() == null
+				|| collectSuspendPoints(mth, labelField, suspended.getResult()).isEmpty()) {
 			return "no-suspend-points";
 		}
 		return "ok";
@@ -73,11 +74,14 @@ public final class StateMachineAnalyzer {
 		if (mth.isNoCode() || mth.getBasicBlocks().isEmpty()) {
 			return null;
 		}
-		InsnNode suspendedMarkerInsn = findSuspendedMarkerInsn(mth);
+		InsnNode suspendedMarkerInsn = findCoroutineSuspendedMarkerInsn(mth);
 		if (suspendedMarkerInsn == null) {
 			return null;
 		}
 		RegisterArg suspendedReg = suspendedMarkerInsn.getResult();
+		if (suspendedReg == null) {
+			return null;
+		}
 		FieldInfo labelField = findLabelField(mth);
 		if (labelField == null) {
 			return null;
@@ -108,7 +112,20 @@ public final class StateMachineAnalyzer {
 				suspendPoints);
 	}
 
-	private static @Nullable InsnNode findSuspendedMarkerInsn(MethodNode mth) {
+	/**
+	 * Kotlin loads {@code COROUTINE_SUSPENDED} either via {@code invoke-static getCOROUTINE_SUSPENDED()}
+	 * or {@code sget} on the singleton field (R8 / newer compilers). The marker register must participate
+	 * in {@code if-ne invokeResult, marker} / {@code return marker} suspend checks — not merely exist.
+	 */
+	private static @Nullable InsnNode findCoroutineSuspendedMarkerInsn(MethodNode mth) {
+		InsnNode invokeMarker = findSuspendedMarkerInvokeInsn(mth);
+		if (invokeMarker != null) {
+			return invokeMarker;
+		}
+		return findSuspendedMarkerSgetInsn(mth);
+	}
+
+	private static @Nullable InsnNode findSuspendedMarkerInvokeInsn(MethodNode mth) {
 		for (BlockNode block : mth.getBasicBlocks()) {
 			for (InsnNode insn : block.getInstructions()) {
 				if (insn.getType() != InsnType.INVOKE || !(insn instanceof InvokeNode)) {
@@ -118,10 +135,34 @@ public final class StateMachineAnalyzer {
 				if (invoke.getInvokeType() != InvokeType.STATIC || invoke.getArgsCount() != 0) {
 					continue;
 				}
-				if (!invoke.getResult().getType().isObject()) {
+				RegisterArg result = invoke.getResult();
+				// void static side effects (e.g. Kotlin throwIndexOverflow) have no result register
+				if (result == null || !result.getType().isObject()) {
 					continue;
 				}
-				if (isSuspendedMarkerUsed(mth, invoke.getResult())) {
+				if (isSuspendedMarkerUsed(mth, result)) {
+					return insn;
+				}
+			}
+		}
+		return null;
+	}
+
+	private static @Nullable InsnNode findSuspendedMarkerSgetInsn(MethodNode mth) {
+		for (BlockNode block : mth.getBasicBlocks()) {
+			for (InsnNode insn : block.getInstructions()) {
+				if (insn.getType() != InsnType.SGET) {
+					continue;
+				}
+				FieldInfo field = getFieldInsn(insn);
+				if (field == null || !field.getType().isObject()) {
+					continue;
+				}
+				RegisterArg result = insn.getResult();
+				if (result == null) {
+					continue;
+				}
+				if (isSuspendedMarkerUsed(mth, result)) {
 					return insn;
 				}
 			}
@@ -157,30 +198,7 @@ public final class StateMachineAnalyzer {
 				}
 			}
 		}
-		return findLabelFieldFromUsage(mth);
-	}
-
-	private static @Nullable FieldInfo findLabelFieldFromUsage(MethodNode mth) {
-		Map<FieldInfo, Integer> iputCounts = new LinkedHashMap<>();
-		for (BlockNode block : mth.getBasicBlocks()) {
-			for (InsnNode insn : block.getInstructions()) {
-				if (insn.getType() != InsnType.IPUT) {
-					continue;
-				}
-				FieldInfo field = getFieldInsn(insn);
-				if (field == null || !field.getType().equals(ArgType.INT)) {
-					continue;
-				}
-				if (findIntConstBefore(block.getInstructions(), insn) != null) {
-					iputCounts.merge(field, 1, Integer::sum);
-				}
-			}
-		}
-		return iputCounts.entrySet().stream()
-				.filter(e -> e.getValue() >= 2)
-				.map(Map.Entry::getKey)
-				.findFirst()
-				.orElse(null);
+		return null;
 	}
 
 	private static boolean hasSuspendedBitMask(MethodNode mth, BlockNode igetBlock, List<InsnNode> insns, int igetIndex,
@@ -496,10 +514,14 @@ public final class StateMachineAnalyzer {
 			return false;
 		}
 		List<InsnNode> insns = block.getInstructions();
-		if (insns.size() != 1 || insns.get(0).getType() != InsnType.RETURN) {
+		if (insns.size() != 1) {
 			return false;
 		}
-		InsnArg retArg = insns.get(0).getArg(0);
+		InsnNode retInsn = insns.get(0);
+		if (retInsn.getType() != InsnType.RETURN || retInsn.getArgsCount() == 0) {
+			return false;
+		}
+		InsnArg retArg = retInsn.getArg(0);
 		return retArg.isRegister() && sameRegister(retArg, suspendedReg);
 	}
 
@@ -602,17 +624,23 @@ public final class StateMachineAnalyzer {
 	}
 
 	private static boolean hasContinuationArg(InsnNode invoke) {
-		for (InsnArg arg : invoke.getArguments()) {
-			if (!arg.isRegister()) {
-				continue;
-			}
-			ArgType type = arg.getType();
-			if (type.isObject() && type.toString().contains("Continuation")) {
-				return true;
-			}
+		if (!(invoke instanceof InvokeNode) || invoke.getArgsCount() == 0) {
+			return false;
 		}
-		// obfuscated continuation types still appear as Object interface args at end
-		return invoke.getArgsCount() >= 1;
+		InvokeNode inv = (InvokeNode) invoke;
+		if (!inv.getCallMth().getReturnType().isObject()) {
+			return false;
+		}
+		InsnArg lastArg = inv.getArg(inv.getArgsCount() - 1);
+		if (!lastArg.isRegister() || !lastArg.getType().isObject()) {
+			return false;
+		}
+		String lastType = lastArg.getType().toString();
+		if (lastType.contains("Continuation")) {
+			return true;
+		}
+		// Kotlin suspend stub: trailing Object continuation parameter (often obfuscated, e.g. Lz2/e;)
+		return true;
 	}
 
 	private static @Nullable InsnNode findLastInvoke(BlockNode block) {
