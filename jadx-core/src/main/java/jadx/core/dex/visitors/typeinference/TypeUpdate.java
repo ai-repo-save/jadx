@@ -489,8 +489,11 @@ public final class TypeUpdate {
 				}
 				return REJECT;
 			}
+			// Bound failure on the other end of MOVE must not be reported as CHANGED:
+			// that laundered REJECT into false progress and drove non-converging updateSeq growth.
+			// SAME means "move is type-compatible; skip this edge" without aborting the whole apply.
 			if (result == REJECT && correctType) {
-				return CHANGED;
+				return SAME;
 			}
 			return result;
 		});
