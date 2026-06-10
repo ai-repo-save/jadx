@@ -80,7 +80,7 @@ public class JadxCLIArgs implements IJadxConfig {
 	@Parameter(names = { "--single-class-output" }, description = "file or dir for write if decompile a single class")
 	protected String singleClassOutput = null;
 
-	@Parameter(names = { "--output-format" }, description = "can be 'java' or 'json'")
+	@Parameter(names = { "--output-format" }, description = "can be 'java', 'json' or 'kotlin'")
 	protected String outputFormat = "java";
 
 	@Parameter(names = { "-e", "--export-gradle" }, description = "save as gradle project (set '--export-gradle-type' to 'auto')")

@@ -90,6 +90,7 @@ public class JadxCLI {
 	private static void initCodeWriterProvider(JadxArgs jadxArgs) {
 		switch (jadxArgs.getOutputFormat()) {
 			case JAVA:
+			case KOTLIN:
 				jadxArgs.setCodeWriterProvider(SimpleCodeWriter::new);
 				break;
 			case JSON:

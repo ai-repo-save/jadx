@@ -19,6 +19,7 @@ public class CodeGen {
 		JadxArgs args = cls.root().getArgs();
 		switch (args.getOutputFormat()) {
 			case JAVA:
+			case KOTLIN:
 				return generateJavaCode(cls, args);
 
 			case JSON:
