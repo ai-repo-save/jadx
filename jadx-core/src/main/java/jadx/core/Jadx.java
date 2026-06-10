@@ -66,6 +66,7 @@ import jadx.core.dex.visitors.regions.CleanRegions;
 import jadx.core.dex.visitors.regions.IfRegionVisitor;
 import jadx.core.dex.visitors.regions.LoopRegionVisitor;
 import jadx.core.dex.visitors.regions.RegionMakerVisitor;
+import jadx.core.dex.visitors.regions.structured.StructuredRegionMakerVisitor;
 import jadx.core.dex.visitors.regions.ReturnVisitor;
 import jadx.core.dex.visitors.regions.SwitchBreakVisitor;
 import jadx.core.dex.visitors.regions.SwitchOverStringVisitor;
@@ -178,6 +179,7 @@ public class Jadx {
 		}
 
 		// regions IR
+		passes.add(new StructuredRegionMakerVisitor());
 		passes.add(new RegionMakerVisitor());
 		passes.add(new IfRegionVisitor());
 		if (args.isRestoreSwitchOverString()) {

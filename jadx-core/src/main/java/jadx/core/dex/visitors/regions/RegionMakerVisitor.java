@@ -1,6 +1,7 @@
 package jadx.core.dex.visitors.regions;
 
 import jadx.core.dex.attributes.AFlag;
+import jadx.core.dex.attributes.AType;
 import jadx.core.dex.nodes.MethodNode;
 import jadx.core.dex.visitors.AbstractVisitor;
 import jadx.core.dex.visitors.JadxVisitor;
@@ -21,8 +22,11 @@ public class RegionMakerVisitor extends AbstractVisitor {
 		if (mth.isNoCode() || mth.getBasicBlocks().isEmpty()) {
 			return;
 		}
+		boolean structured = mth.contains(AType.STRUCTURED_COROUTINE) && mth.getRegion() != null;
 		RegionMaker rm = new RegionMaker(mth);
-		mth.setRegion(rm.makeMthRegion());
+		if (!structured) {
+			mth.setRegion(rm.makeMthRegion());
+		}
 		if (!mth.isNoExceptionHandlers()) {
 			new ExcHandlersRegionMaker(mth, rm).process();
 		}
