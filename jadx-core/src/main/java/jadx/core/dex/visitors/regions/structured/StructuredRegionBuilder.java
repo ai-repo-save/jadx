@@ -1,6 +1,5 @@
 package jadx.core.dex.visitors.regions.structured;
 
-import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
@@ -16,12 +15,14 @@ import jadx.core.dex.attributes.AType;
 import jadx.core.dex.attributes.nodes.LoopInfo;
 import jadx.core.dex.attributes.nodes.StructuredCoroutineAttr;
 import jadx.core.dex.nodes.BlockNode;
+import jadx.core.dex.nodes.Edge;
 import jadx.core.dex.nodes.MethodNode;
 import jadx.core.dex.regions.Region;
 import jadx.core.dex.regions.structured.CoroutineDispatchRegion;
 import jadx.core.dex.regions.structured.MultiEntryLoopRegion;
 import jadx.core.dex.visitors.blocks.reducible.GraphShapeClassifier;
 import jadx.core.dex.visitors.regions.maker.StructuredBlockRegionBuilder;
+import jadx.core.utils.BlockUtils;
 
 public final class StructuredRegionBuilder {
 	private StructuredRegionBuilder() {
@@ -32,50 +33,37 @@ public final class StructuredRegionBuilder {
 		if (component == null || !matchesSharedLoopShape(component)) {
 			return null;
 		}
-		BlockNode outerHeader = findHeaderBlock(mth, 0x003e);
-		BlockNode innerHeader = findHeaderBlock(mth, 0x0063);
-		BlockNode innerExitToOuter = findBlockByOffset(mth, 0x0067);
-		BlockNode innerResumeEntry = findBlockByOffset(mth, 0x0106);
-		BlockNode outerResumeEntry = findBlockByOffset(mth, 0x01cb);
-		if (outerHeader == null || innerHeader == null || innerExitToOuter == null) {
-			return null;
-		}
 
 		Set<BlockNode> componentBlocks = component.getBlocks();
-		Set<BlockNode> innerBlocks = collectInnerLoopBlocks(mth, innerHeader);
-		List<BlockNode> outerBodyBlocks = new ArrayList<>();
-		List<BlockNode> innerBodyBlocks = new ArrayList<>();
-		for (BlockNode block : sortBlocks(componentBlocks)) {
-			if (block == outerHeader || block == innerHeader) {
-				continue;
-			}
-			if (block.getStartOffset() == -1) {
-				continue;
-			}
-			if (innerBlocks.contains(block)) {
-				innerBodyBlocks.add(block);
-			} else {
-				outerBodyBlocks.add(block);
-			}
+		LoopInfo outerLoop;
+		LoopInfo innerLoop;
+		LoopInfo[] componentLoops = findComponentLoopPair(mth, componentBlocks);
+		if (componentLoops == null) {
+			return null;
+		}
+		outerLoop = componentLoops[0];
+		innerLoop = componentLoops[1];
+
+		BlockNode outerHeader = outerLoop.getStart();
+		BlockNode innerHeader = innerLoop.getStart();
+		BlockNode innerExitToOuter = findInnerExitBlock(outerHeader, innerLoop);
+		boolean innerExitsToOuter = innerExitToOuter != null
+				|| BlockUtils.loopHeaderExitsTo(outerHeader, innerHeader);
+		if (!innerExitsToOuter) {
+			return null;
 		}
 
 		List<BlockNode> postLoopBlocks = collectPostLoopBlocks(mth, componentBlocks);
 		Set<BlockNode> postLoopSet = new HashSet<>(postLoopBlocks);
 		List<BlockNode> preambleBlocks = collectPreambleBlocks(mth, componentBlocks, postLoopSet);
-		Map<Integer, BlockNode> resumeEntryByLabel = new java.util.HashMap<>();
-		if (innerResumeEntry != null) {
-			resumeEntryByLabel.put(2, innerResumeEntry);
-		}
-		if (outerResumeEntry != null) {
-			resumeEntryByLabel.put(3, outerResumeEntry);
-		}
+		Map<Integer, BlockNode> resumeEntryByLabel = collectResumeEntries(component, outerHeader, innerHeader);
 
 		StructuredCoroutineAttr attr = new StructuredCoroutineAttr(
 				outerHeader,
 				innerHeader,
 				innerExitToOuter,
-				innerResumeEntry,
-				outerResumeEntry,
+				resumeEntryByLabel.get(2),
+				resumeEntryByLabel.get(3),
 				preambleBlocks,
 				resumeEntryByLabel,
 				postLoopBlocks);
@@ -92,25 +80,94 @@ public final class StructuredRegionBuilder {
 			}
 		}
 
-		StructuredBlockRegionBuilder preambleBuilder = new StructuredBlockRegionBuilder(mth, preambleStops);
-		StructuredBlockRegionBuilder loopBodyBuilder = new StructuredBlockRegionBuilder(mth, loopBodyStops);
+		Set<BlockNode> innerBodyStops = new HashSet<>(loopBodyStops);
+		if (innerExitToOuter != null) {
+			innerBodyStops.add(innerExitToOuter);
+		}
+
+		StructuredBlockRegionBuilder preambleBuilder = new StructuredBlockRegionBuilder(mth, preambleStops, false);
+		StructuredBlockRegionBuilder outerBodyBuilder = new StructuredBlockRegionBuilder(mth, loopBodyStops, true);
+		StructuredBlockRegionBuilder innerBodyBuilder = new StructuredBlockRegionBuilder(mth, innerBodyStops, true);
 		Region preambleRegion = preambleBuilder.buildFrom(null, mth.getEnterBlock());
 
 		Region root = new Region(null);
 		root.add(new CoroutineDispatchRegion(root, preambleRegion));
-		Region outerBodyRegion = loopBodyBuilder.buildFromBlocks(root, outerBodyBlocks);
-		Region innerBodyRegion = loopBodyBuilder.buildFromBlocks(root, innerBodyBlocks);
+		Region outerBodyRegion = outerBodyBuilder.buildFrom(root, BlockUtils.getLoopBodyEntry(outerHeader));
+		Region innerBodyRegion = innerBodyBuilder.buildFrom(root, BlockUtils.getLoopBodyEntry(innerHeader));
 		root.add(new MultiEntryLoopRegion(
 				root,
 				outerHeader,
 				innerHeader,
 				innerExitToOuter,
+				innerExitsToOuter,
 				outerBodyRegion,
 				innerBodyRegion));
-		Region post = preambleBuilder.buildFromBlocks(root, postLoopBlocks);
+		BlockNode postStart = postLoopBlocks.isEmpty() ? null : postLoopBlocks.get(0);
+		Region post = preambleBuilder.buildFrom(root, postStart);
 		root.add(post);
 		mth.addAttr(attr);
 		return root;
+	}
+
+	/**
+	 * Find nested outer/inner loops in a multi-entry component.
+	 * {@link LoopInfo#getParentLoop()} is not reliable here: natural loops may overlap without strict block containment.
+	 *
+	 * @return [outer, inner] or null
+	 */
+	private static @Nullable LoopInfo[] findComponentLoopPair(MethodNode mth, Set<BlockNode> componentBlocks) {
+		List<LoopInfo> componentLoops = new ArrayList<>();
+		for (LoopInfo loop : mth.getLoops()) {
+			if (componentBlocks.contains(loop.getStart())) {
+				componentLoops.add(loop);
+			}
+		}
+		for (LoopInfo inner : componentLoops) {
+			BlockNode innerHeader = inner.getStart();
+			for (LoopInfo outer : componentLoops) {
+				if (inner == outer) {
+					continue;
+				}
+				if (BlockUtils.loopHeaderExitsTo(outer.getStart(), innerHeader)) {
+					return new LoopInfo[] { outer, inner };
+				}
+			}
+		}
+		return null;
+	}
+
+	private static @Nullable BlockNode findInnerExitBlock(BlockNode outerHeader, LoopInfo innerLoop) {
+		for (BlockNode block : innerLoop.getLoopBlocks()) {
+			if (block == innerLoop.getStart()) {
+				continue;
+			}
+			for (BlockNode succ : block.getSuccessors()) {
+				if (BlockUtils.resolvesToHeader(outerHeader, succ)) {
+					return block;
+				}
+			}
+		}
+		return null;
+	}
+
+	private static Map<Integer, BlockNode> collectResumeEntries(
+			GraphShapeClassifier.Component component,
+			BlockNode outerHeader,
+			BlockNode innerHeader) {
+		Map<Integer, BlockNode> resumeEntryByLabel = new java.util.HashMap<>();
+		for (Edge entry : component.getEntries()) {
+			BlockNode source = entry.getSource();
+			if (source.getStartOffset() == -1) {
+				continue;
+			}
+			BlockNode target = BlockUtils.followEmptyPath(entry.getTarget());
+			if (target == innerHeader) {
+				resumeEntryByLabel.put(2, source);
+			} else if (target == outerHeader) {
+				resumeEntryByLabel.put(3, source);
+			}
+		}
+		return resumeEntryByLabel;
 	}
 
 	private static List<BlockNode> collectPreambleBlocks(
@@ -155,43 +212,13 @@ public final class StructuredRegionBuilder {
 		return false;
 	}
 
-	private static Set<BlockNode> collectInnerLoopBlocks(MethodNode mth, BlockNode innerHeader) {
-		Set<BlockNode> blocks = new HashSet<>();
-		for (BlockNode block : mth.getBasicBlocks()) {
-			for (LoopInfo loop : block.getAll(AType.LOOP)) {
-				if (loop.getStart() == innerHeader) {
-					blocks.addAll(loop.getLoopBlocks());
-				}
-			}
-		}
-		return blocks;
-	}
-
 	private static List<BlockNode> sortBlocks(Set<BlockNode> blocks) {
 		List<BlockNode> sorted = new ArrayList<>(blocks);
 		sorted.sort(Comparator.comparingInt(BlockNode::getStartOffset));
 		return sorted;
 	}
 
-	private static @Nullable BlockNode findHeaderBlock(MethodNode mth, int offset) {
-		for (BlockNode block : mth.getBasicBlocks()) {
-			if (block.getStartOffset() == offset) {
-				return block;
-			}
-		}
-		return null;
-	}
-
 	private static boolean matchesSharedLoopShape(GraphShapeClassifier.Component component) {
 		return component.getLoopStartCount() >= 2 && component.getEntries().size() >= 3;
-	}
-
-	private static @Nullable BlockNode findBlockByOffset(MethodNode mth, int offset) {
-		for (BlockNode block : mth.getBasicBlocks()) {
-			if (block.getStartOffset() == offset) {
-				return block;
-			}
-		}
-		return null;
 	}
 }

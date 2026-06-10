@@ -28,6 +28,7 @@ public final class MultiEntryLoopRegion extends AbstractRegion {
 	private final BlockNode outerHeader;
 	private final BlockNode innerHeader;
 	private final BlockNode innerExitToOuter;
+	private final boolean continueOuterAfterInner;
 	private final Region outerBodyRegion;
 	private final Region innerBodyRegion;
 
@@ -44,12 +45,14 @@ public final class MultiEntryLoopRegion extends AbstractRegion {
 			BlockNode outerHeader,
 			BlockNode innerHeader,
 			BlockNode innerExitToOuter,
+			boolean continueOuterAfterInner,
 			Region outerBodyRegion,
 			Region innerBodyRegion) {
 		super(parent);
 		this.outerHeader = outerHeader;
 		this.innerHeader = innerHeader;
 		this.innerExitToOuter = innerExitToOuter;
+		this.continueOuterAfterInner = continueOuterAfterInner;
 		this.outerBodyRegion = outerBodyRegion;
 		this.innerBodyRegion = innerBodyRegion;
 	}
@@ -87,7 +90,7 @@ public final class MultiEntryLoopRegion extends AbstractRegion {
 		regionGen.makeRegion(code, innerBodyRegion);
 		code.decIndent();
 		code.startLine('}');
-		if (innerExitToOuter != null) {
+		if (continueOuterAfterInner) {
 			code.startLine("continue " + OUTER_LABEL + ';');
 		}
 	}

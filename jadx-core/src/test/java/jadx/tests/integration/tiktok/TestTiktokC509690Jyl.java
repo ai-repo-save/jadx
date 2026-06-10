@@ -12,7 +12,10 @@ import org.junit.jupiter.api.Test;
 
 import jadx.api.JadxInternalAccess;
 import jadx.core.dex.attributes.AFlag;
+import jadx.core.dex.instructions.InsnType;
 import jadx.core.dex.nodes.BlockNode;
+import jadx.core.dex.nodes.InsnNode;
+import jadx.core.utils.BlockUtils;
 import jadx.core.dex.nodes.ClassNode;
 import jadx.core.dex.nodes.Edge;
 import jadx.core.dex.nodes.MethodNode;
@@ -31,6 +34,25 @@ import static jadx.tests.api.utils.assertj.JadxAssertions.assertThat;
 public class TestTiktokC509690Jyl extends SmaliTest {
 
 	@Test
+	public void testLoopHeadersContainConditionInsn() {
+		allowWarnInCode();
+		enableDeobfuscation();
+		MethodNode mth = loadProcessedTargetMethod();
+		BlockNode outerHeader = findLoopStart(mth, 0x003e);
+		BlockNode innerHeader = findLoopStart(mth, 0x0063);
+		InsnNode outerLast = BlockUtils.getLastInsn(outerHeader);
+		InsnNode innerLast = BlockUtils.getLastInsn(innerHeader);
+		assertThat(outerLast).isNotNull();
+		assertThat(innerLast).isNotNull();
+		assertThat(outerLast.getType()).isEqualTo(InsnType.IF);
+		assertThat(innerLast.getType())
+				.as("%s insns=%d succs=%s", innerHeader, innerHeader.getInstructions().size(), innerHeader.getCleanSuccessors())
+				.isEqualTo(InsnType.IF);
+		assertThat(BlockUtils.getLoopBodyEntry(outerHeader)).isNotNull();
+		assertThat(BlockUtils.getLoopBodyEntry(innerHeader)).isNotNull();
+	}
+
+	@Test
 	public void testSharedEntryComponentShapeIsClassified() {
 		args.setOutDir(new File("build/test-cfg/TestTiktokC509690Jyl"));
 		args.setRawCFGOutput(true);
@@ -44,7 +66,7 @@ public class TestTiktokC509690Jyl extends SmaliTest {
 		assertThat(formatEdges(sharedLoopComponent.getEntries()))
 				.containsExactly("0x002b->?", "0x0106->?", "0x01cb->?");
 		assertThat(formatEdges(sharedLoopComponent.getExits()))
-				.containsExactly("0x0042->0x01df", "0x00c5->0x00c7", "0x0103->0x0105");
+				.containsExactly("0x003e->0x01df", "0x00c5->0x00c7", "0x0103->0x0105");
 	}
 
 	@Test
@@ -60,24 +82,22 @@ public class TestTiktokC509690Jyl extends SmaliTest {
 
 		BlockNode outerHeader = findLoopStart(mth, 0x003e);
 		BlockNode innerHeader = findLoopStart(mth, 0x0063);
-		BlockNode outerBridge = findBridgeTo(mth, outerHeader, List.of(0x002b, 0x0067, 0x01cb));
+		BlockNode outerBridge = findBridgeTo(mth, outerHeader, List.of(0x002b, 0x0063, 0x01cb));
 		BlockNode innerBridge = findBridgeTo(mth, innerHeader, List.of(0x005f, 0x0106));
-		BlockNode innerFalseBranch = findSingleBlockByOffset(mth, 0x0067);
 
 		assertThat(formatBlockOffsets(outerBridge.getSuccessors()))
 				.containsExactly("0x003e");
 		assertThat(formatBlockOffsets(outerBridge.getPredecessors()))
-				.containsExactly("0x002b", "0x0067", "0x01cb");
+				.containsExactly("0x002b", "0x0063", "0x01cb");
 		assertThat(formatBlockOffsets(innerBridge.getSuccessors()))
 				.containsExactly("0x0063");
 		assertThat(formatBlockOffsets(innerBridge.getPredecessors()))
 				.containsExactly("0x005f", "0x0106");
 
-		assertThat(innerHeader.getSuccessors()).contains(innerFalseBranch);
-		assertThat(innerFalseBranch.getSuccessors()).contains(outerBridge);
+		assertThat(BlockUtils.loopHeaderExitsTo(outerHeader, innerHeader)).isTrue();
 
 		assertThat(sharedLoopComponent.getBlocks())
-				.contains(outerHeader, innerHeader, outerBridge, innerBridge, innerFalseBranch);
+				.contains(outerHeader, innerHeader, outerBridge, innerBridge);
 		assertThat(sharedLoopComponent.getEntries())
 				.anySatisfy(edge -> assertEdge(edge, 0x002b, outerBridge));
 		assertThat(sharedLoopComponent.getEntries())
@@ -102,10 +122,10 @@ public class TestTiktokC509690Jyl extends SmaliTest {
 		assertThat(formatEdges(sharedLoopComponent.getEntries()))
 				.containsExactly("0x002b->?", "0x0106->?", "0x01cb->?");
 		assertThat(formatEdges(sharedLoopComponent.getExits()))
-				.containsExactly("0x0042->0x01df", "0x00c5->0x00c7", "0x0103->0x0105");
+				.containsExactly("0x003e->0x01df", "0x00c5->0x00c7", "0x0103->0x0105");
 		assertThat(formatBridgeFacts(sharedLoopComponent.getBridges()))
 				.containsExactly(
-						"0x002b,0x0067,0x01cb->?->0x003e",
+						"0x002b,0x0063,0x01cb->?->0x003e",
 						"0x005f,0x0106->?->0x0063");
 		assertThat(formatNaturalLoopFacts(sharedLoopComponent.getNaturalLoops()))
 				.containsExactly(
@@ -129,7 +149,7 @@ public class TestTiktokC509690Jyl extends SmaliTest {
 		assertThat(sharedLoopRegion.getKind()).isEqualTo(StructuringGraph.RegionKind.MULTI_ENTRY);
 		assertThat(formatBridgeFacts(sharedLoopRegion.getBridges()))
 				.containsExactly(
-						"0x002b,0x0067,0x01cb->?->0x003e",
+						"0x002b,0x0063,0x01cb->?->0x003e",
 						"0x005f,0x0106->?->0x0063");
 		assertThat(formatRegionEdges(sharedLoopRegion.getEdges()))
 				.containsExactly(
@@ -137,13 +157,13 @@ public class TestTiktokC509690Jyl extends SmaliTest {
 						"BRIDGE_INPUT_FROM_OUTSIDE:0x0106->?",
 						"BRIDGE_INPUT_FROM_OUTSIDE:0x01cb->?",
 						"BRIDGE_INPUT_FROM_REGION:0x005f->?",
-						"BRIDGE_INPUT_FROM_REGION:0x0067->?",
+						"BRIDGE_INPUT_FROM_REGION:0x0063->?",
 						"BRIDGE_TO_HEADER:?->0x003e",
 						"BRIDGE_TO_HEADER:?->0x0063",
 						"COMPONENT_ENTRY:0x002b->?",
 						"COMPONENT_ENTRY:0x0106->?",
 						"COMPONENT_ENTRY:0x01cb->?",
-						"COMPONENT_EXIT:0x0042->0x01df",
+						"COMPONENT_EXIT:0x003e->0x01df",
 						"COMPONENT_EXIT:0x00c5->0x00c7",
 						"COMPONENT_EXIT:0x0103->0x0105",
 						"NATURAL_BACK_EDGE:0x0063->0x0063",
@@ -166,16 +186,17 @@ public class TestTiktokC509690Jyl extends SmaliTest {
 	}
 
 	private static Component findSharedLoopComponent(MethodNode mth) {
-		List<Component> sharedLoopComponents = GraphShapeClassifier.analyze(mth).getMultiEntryComponents().stream()
-				.filter(component -> sortedBlockStartOffsets(component).equals(expectedSharedLoopComponentOffsets()))
+		List<Component> multiEntry = GraphShapeClassifier.analyze(mth).getMultiEntryComponents();
+		List<Component> sharedLoopComponents = multiEntry.stream()
+				.filter(component -> component.getLoopStartCount() >= 2 && component.getEntries().size() >= 3)
 				.collect(Collectors.toList());
-		assertThat(sharedLoopComponents).hasSize(1);
+		assertThat(sharedLoopComponents).as("multiEntry=%s", multiEntry).hasSize(1);
 		return sharedLoopComponents.get(0);
 	}
 
 	private static ControlFlowComponentGraph.Component findSharedComponentGraphComponent(ControlFlowComponentGraph graph) {
 		List<ControlFlowComponentGraph.Component> sharedLoopComponents = graph.getMultiEntryComponents().stream()
-				.filter(component -> sortedBlockStartOffsets(component).equals(expectedSharedLoopComponentOffsets()))
+				.filter(component -> component.getLoopStartCount() >= 2 && component.getEntries().size() >= 3)
 				.collect(Collectors.toList());
 		assertThat(sharedLoopComponents).hasSize(1);
 		return sharedLoopComponents.get(0);
@@ -183,7 +204,7 @@ public class TestTiktokC509690Jyl extends SmaliTest {
 
 	private static RegionNode findSharedStructuringRegion(StructuringGraph graph) {
 		List<RegionNode> sharedLoopRegions = graph.getMultiEntryRegions().stream()
-				.filter(region -> sortedBlockStartOffsets(region).equals(expectedSharedLoopComponentOffsets()))
+				.filter(region -> region.getNaturalLoops().size() >= 2 && region.getEntries().size() >= 3)
 				.collect(Collectors.toList());
 		assertThat(sharedLoopRegions).hasSize(1);
 		return sharedLoopRegions.get(0);

@@ -7,6 +7,8 @@ import jadx.core.dex.instructions.args.ArgType;
 import jadx.core.dex.instructions.args.InsnArg;
 import jadx.core.dex.instructions.args.LiteralArg;
 import jadx.core.dex.instructions.args.PrimitiveType;
+import org.jetbrains.annotations.Nullable;
+
 import jadx.core.dex.nodes.BlockNode;
 import jadx.core.dex.nodes.InsnNode;
 import jadx.core.utils.InsnUtils;
@@ -117,6 +119,11 @@ public class IfNode extends GotoNode {
 
 	public BlockNode getElseBlock() {
 		return elseBlock;
+	}
+
+	public void setBranches(@Nullable BlockNode then, @Nullable BlockNode elseBlock) {
+		this.thenBlock = then;
+		this.elseBlock = elseBlock;
 	}
 
 	@Override
