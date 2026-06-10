@@ -24,10 +24,7 @@ public final class FinishTypeInference extends AbstractVisitor {
 			if (!type.isTypeKnown()) {
 				mth.addWarnComment("Type inference failed for: " + var.getDetailedVarInfo(mth));
 			}
-			ArgType codeVarType = var.getCodeVar().getType();
-			if (codeVarType == null) {
-				var.getCodeVar().setType(ArgType.UNKNOWN);
-			}
+			// Leave CodeVar type null when unknown; ProcessVariables resolves it at declaration sites.
 		});
 	}
 

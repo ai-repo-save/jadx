@@ -68,10 +68,13 @@ public class TestTiktokStructuredDecompile extends SmaliTest {
 				.doesNotContain("UnsupportedOperationException(\"Method not decompiled")
 				.doesNotContain("Method dump skipped")
 				.doesNotContain("??")
+				.contains("Collection arrayList")
+				.doesNotContain("?? arrayList")
 				.contains("outer:")
 				.contains("continue outer")
 				.contains("while (")
 				.doesNotContain("while (!it.hasNext())")
+				.contains("return objLJFF")
 				.contains("return ");
 	}
 
@@ -125,7 +128,7 @@ public class TestTiktokStructuredDecompile extends SmaliTest {
 		return mth;
 	}
 
-	private static List<File> collectFixtureSmaliFiles() {
+	static List<File> collectFixtureSmaliFiles() {
 		File smaliDir = new File("src/test/smali/tiktok/TestTiktokC509690Jyl");
 		if (!smaliDir.exists()) {
 			smaliDir = new File("jadx-core/src/test/smali/tiktok/TestTiktokC509690Jyl");
