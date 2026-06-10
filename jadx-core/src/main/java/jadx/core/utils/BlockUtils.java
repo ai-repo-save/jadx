@@ -418,6 +418,48 @@ public class BlockUtils {
 		return s.isEmpty() ? null : s.get(0);
 	}
 
+	/**
+	 * Body entry for a standard {@code while (cond)} header ({@code if-eqz cond, exit} in dex).
+	 */
+	@Nullable
+	public static BlockNode getLoopBodyEntry(BlockNode header) {
+		InsnNode lastInsn = getLastInsn(header);
+		if (!(lastInsn instanceof IfNode)) {
+			return null;
+		}
+		IfNode ifInsn = (IfNode) lastInsn;
+		BlockNode elseBlock = ifInsn.getElseBlock();
+		if (elseBlock != null) {
+			return elseBlock;
+		}
+		return ifInsn.getThenBlock();
+	}
+
+	public static boolean loopHeaderExitsTo(BlockNode targetHeader, BlockNode loopHeader) {
+		InsnNode lastInsn = getLastInsn(loopHeader);
+		if (!(lastInsn instanceof IfNode)) {
+			return false;
+		}
+		IfNode ifInsn = (IfNode) lastInsn;
+		return resolvesToHeader(targetHeader, ifInsn.getThenBlock())
+				|| resolvesToHeader(targetHeader, ifInsn.getElseBlock());
+	}
+
+	public static boolean resolvesToHeader(BlockNode targetHeader, @Nullable BlockNode block) {
+		if (block == null) {
+			return false;
+		}
+		if (block == targetHeader || followEmptyPath(block) == targetHeader) {
+			return true;
+		}
+		for (BlockNode succ : block.getSuccessors()) {
+			if (succ == targetHeader || followEmptyPath(succ) == targetHeader) {
+				return true;
+			}
+		}
+		return false;
+	}
+
 	@Nullable
 	public static BlockNode getPrevBlock(BlockNode block) {
 		List<BlockNode> preds = block.getPredecessors();

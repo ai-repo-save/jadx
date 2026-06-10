@@ -38,9 +38,10 @@ public class TestTiktokStructuredDecompile extends SmaliTest {
 			return true;
 		});
 		assertThat(loopRegion.get()).isNotNull();
-		assertThat(loopRegion.get().getOuterBodyRegion().getSubBlocks().size()
-				+ loopRegion.get().getInnerBodyRegion().getSubBlocks().size())
-				.as("structured loop body regions")
+		int outerBodySize = loopRegion.get().getOuterBodyRegion().getSubBlocks().size();
+		int innerBodySize = loopRegion.get().getInnerBodyRegion().getSubBlocks().size();
+		assertThat(outerBodySize + innerBodySize)
+				.as("structured loop body regions (outer=%d inner=%d)", outerBodySize, innerBodySize)
 				.isGreaterThan(0);
 	}
 

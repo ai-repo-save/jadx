@@ -26,9 +26,13 @@ public final class StructuredBlockRegionBuilder {
 	private final IfRegionMaker ifMaker;
 
 	public StructuredBlockRegionBuilder(MethodNode mth, Collection<BlockNode> stopBlocks) {
+		this(mth, stopBlocks, true);
+	}
+
+	public StructuredBlockRegionBuilder(MethodNode mth, Collection<BlockNode> stopBlocks, boolean skipLoops) {
 		this.mth = mth;
 		this.stopBlocks = Set.copyOf(stopBlocks);
-		this.regionMaker = new RegionMaker(mth).setSkipLoops(true);
+		this.regionMaker = new RegionMaker(mth).setSkipLoops(skipLoops);
 		this.ifMaker = new IfRegionMaker(mth, regionMaker);
 		this.regionMaker.getStack().addExits(this.stopBlocks);
 	}

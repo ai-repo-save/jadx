@@ -20,6 +20,7 @@ import jadx.core.dex.attributes.AFlag;
 import jadx.core.dex.attributes.AType;
 import jadx.core.dex.attributes.nodes.CodeFeaturesAttr;
 import jadx.core.dex.attributes.nodes.LoopInfo;
+import jadx.core.dex.instructions.IfNode;
 import jadx.core.dex.instructions.InsnType;
 import jadx.core.dex.instructions.args.InsnArg;
 import jadx.core.dex.instructions.args.LiteralArg;
@@ -523,6 +524,9 @@ public class BlockProcessor extends AbstractVisitor {
 			if (insertBlocksForBreak(mth, loop)) {
 				return true;
 			}
+			if (loop.getStart() == block && mergeSplitLoopHeader(mth, loop)) {
+				return true;
+			}
 		}
 		if (loopsCount > 1 && splitLoops(mth, block, loops)) {
 			return true;
@@ -534,6 +538,123 @@ public class BlockProcessor extends AbstractVisitor {
 					|| simplifyLoopEnd(mth, loop);
 		}
 		return false;
+	}
+
+	/**
+	 * Merge a split loop header (empty or pre-condition block) with the following condition block.
+	 * Ensures {@link LoopInfo#getStart()} ends with the loop {@code IF} instruction.
+	 */
+	private static boolean mergeSplitLoopHeader(MethodNode mth, LoopInfo loop) {
+		BlockNode start = loop.getStart();
+		InsnNode lastInsn = BlockUtils.getLastInsn(start);
+		if (lastInsn != null && lastInsn.getType() == InsnType.IF) {
+			return false;
+		}
+		BlockNode conditionBlock = findLoopConditionBlock(loop, start);
+		if (conditionBlock == null) {
+			return false;
+		}
+		List<BlockNode> mergeBlocks = collectBlocksOnPath(start, conditionBlock);
+		if (mergeBlocks.isEmpty()) {
+			return false;
+		}
+
+		InsnNode condLastInsn = BlockUtils.getLastInsn(conditionBlock);
+		IfNode condIf = condLastInsn instanceof IfNode ? (IfNode) condLastInsn : null;
+
+		for (BlockNode block : mergeBlocks) {
+			start.getInstructions().addAll(block.getInstructions());
+			block.getInstructions().clear();
+		}
+		if (start.getInstructions().size() > 1) {
+			start.add(AFlag.ALLOW_MULTIPLE_INSNS_LOOP_COND);
+		}
+
+		BlockNode firstMerge = mergeBlocks.get(0);
+		BlockSplitter.removeConnection(start, firstMerge);
+		for (BlockNode succ : new ArrayList<>(conditionBlock.getSuccessors())) {
+			BlockSplitter.removeConnection(conditionBlock, succ);
+			BlockSplitter.connect(start, succ);
+			BlockSplitter.replaceTarget(conditionBlock, succ, start);
+		}
+		start.updateCleanSuccessors();
+
+		InsnNode mergedLastInsn = BlockUtils.getLastInsn(start);
+		if (condIf != null && mergedLastInsn instanceof IfNode) {
+			IfNode mergedIf = (IfNode) mergedLastInsn;
+			mergedIf.setBranches(condIf.getThenBlock(), condIf.getElseBlock());
+		}
+
+		removeFromMethod(new HashSet<>(mergeBlocks), mth);
+
+		if (DEBUG_MODS) {
+			mth.get(DebugModAttr.TYPE).addEvent("Merge split loop header");
+		}
+		return true;
+	}
+
+	private static @Nullable BlockNode findLoopConditionBlock(LoopInfo loop, BlockNode start) {
+		Set<BlockNode> loopBlocks = loop.getLoopBlocks();
+		BlockNode block = start;
+		BlockNode conditionBlock = null;
+		while (true) {
+			InsnNode insn = BlockUtils.getLastInsn(block);
+			if (insn != null && insn.getType() == InsnType.IF) {
+				conditionBlock = block;
+				break;
+			}
+			if (block.getCleanSuccessors().size() != 1) {
+				break;
+			}
+			BlockNode next = block.getCleanSuccessors().get(0);
+			if (!loopBlocks.contains(next) || next == loop.getEnd()) {
+				break;
+			}
+			block = next;
+		}
+		if (conditionBlock == null || conditionBlock == start) {
+			return null;
+		}
+		if (!canMergeLoopCondition(loop, start, conditionBlock)) {
+			return null;
+		}
+		return conditionBlock;
+	}
+
+	private static boolean canMergeLoopCondition(LoopInfo loop, BlockNode start, BlockNode conditionBlock) {
+		if (BlockUtils.isEmptySimplePath(start, conditionBlock)) {
+			return true;
+		}
+		return isLinearPathInLoop(loop, start, conditionBlock);
+	}
+
+	private static boolean isLinearPathInLoop(LoopInfo loop, BlockNode start, BlockNode end) {
+		Set<BlockNode> loopBlocks = loop.getLoopBlocks();
+		BlockNode block = start;
+		while (block != end) {
+			if (block.getCleanSuccessors().size() != 1) {
+				return false;
+			}
+			BlockNode next = block.getCleanSuccessors().get(0);
+			if (!loopBlocks.contains(next)) {
+				return false;
+			}
+			block = next;
+		}
+		return true;
+	}
+
+	private static List<BlockNode> collectBlocksOnPath(BlockNode start, BlockNode end) {
+		List<BlockNode> path = new ArrayList<>();
+		BlockNode block = BlockUtils.getNextBlock(start);
+		while (block != null) {
+			path.add(block);
+			if (block == end) {
+				return path;
+			}
+			block = BlockUtils.getNextBlock(block);
+		}
+		return Collections.emptyList();
 	}
 
 	/**
