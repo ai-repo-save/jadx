@@ -163,9 +163,32 @@ public class InsnGen {
 		if (codeVar.isFinal()) {
 			code.add("final ");
 		}
-		useType(code, codeVar.getType());
+		useType(code, resolveVarType(codeVar));
 		code.add(' ');
 		defVar(code, codeVar);
+	}
+
+	private ArgType resolveVarType(CodeVar codeVar) {
+		ArgType type = codeVar.getType();
+		if (type != null && type.isTypeKnown()) {
+			return type;
+		}
+		for (SSAVar ssaVar : codeVar.getSsaVars()) {
+			ArgType ssaType = ssaVar.getImmutableType();
+			if (ssaType != null && ssaType.isTypeKnown()) {
+				return ssaType;
+			}
+		}
+		for (SSAVar ssaVar : codeVar.getSsaVars()) {
+			ArgType ssaType = ssaVar.getTypeInfo().getType();
+			if (ssaType != null && ssaType.isTypeKnown()) {
+				return ssaType;
+			}
+		}
+		if (type != null && type.isArray()) {
+			return type;
+		}
+		return ArgType.object("java.util.Collection");
 	}
 
 	/**
@@ -381,6 +404,10 @@ public class InsnGen {
 
 			case CONTINUE:
 				code.add("continue");
+				LoopLabelAttr continueLabel = insn.get(AType.LOOP_LABEL);
+				if (continueLabel != null) {
+					code.add(' ').add(mgen.getNameGen().getLoopLabel(continueLabel));
+				}
 				break;
 
 			case THROW:

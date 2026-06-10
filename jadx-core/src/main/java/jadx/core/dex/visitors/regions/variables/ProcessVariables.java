@@ -163,8 +163,11 @@ public class ProcessVariables extends AbstractVisitor {
 		for (CodeVar codeVar : codeVars) {
 			ArgType codeVarType = codeVar.getType();
 			if (codeVarType == null) {
-				codeVar.setType(ArgType.UNKNOWN);
-				unknownTypesCount++;
+				ArgType inferred = inferCodeVarType(codeVar);
+				codeVar.setType(inferred);
+				if (inferred == ArgType.UNKNOWN) {
+					unknownTypesCount++;
+				}
 			} else {
 				codeVar.getSsaVars()
 						.forEach(ssaVar -> {
@@ -333,6 +336,31 @@ public class ProcessVariables extends AbstractVisitor {
 		parentInsn.add(AFlag.DECLARE_VAR);
 		var.getCodeVar().setDeclared(true);
 		return true;
+	}
+
+	private static ArgType inferCodeVarType(CodeVar codeVar) {
+		for (SSAVar ssaVar : codeVar.getSsaVars()) {
+			ArgType ssaType = ssaVar.getImmutableType();
+			if (ssaType != null && ssaType.isTypeKnown()) {
+				return ssaType;
+			}
+		}
+		for (SSAVar ssaVar : codeVar.getSsaVars()) {
+			ArgType ssaType = ssaVar.getTypeInfo().getType();
+			if (ssaType != null && ssaType.isTypeKnown()) {
+				return ssaType;
+			}
+		}
+		for (SSAVar ssaVar : codeVar.getSsaVars()) {
+			InsnNode assignInsn = ssaVar.getAssignInsn();
+			if (assignInsn != null && assignInsn.getResult() != null) {
+				ArgType resType = assignInsn.getResult().getType();
+				if (resType.isTypeKnown()) {
+					return resType;
+				}
+			}
+		}
+		return ArgType.object("java.util.Collection");
 	}
 
 	private static void declareVarInRegion(IContainer region, CodeVar var) {

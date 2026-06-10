@@ -1,5 +1,6 @@
 package jadx.core.dex.visitors.regions.structured;
 
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
@@ -13,8 +14,12 @@ import org.jetbrains.annotations.Nullable;
 import jadx.core.dex.attributes.AFlag;
 import jadx.core.dex.attributes.AType;
 import jadx.core.dex.attributes.nodes.LoopInfo;
+import jadx.core.dex.attributes.nodes.LoopLabelAttr;
 import jadx.core.dex.attributes.nodes.StructuredCoroutineAttr;
+import jadx.core.dex.instructions.IfNode;
+import jadx.core.dex.instructions.InsnType;
 import jadx.core.dex.nodes.BlockNode;
+import jadx.core.dex.nodes.InsnNode;
 import jadx.core.dex.nodes.Edge;
 import jadx.core.dex.nodes.MethodNode;
 import jadx.core.dex.regions.Region;
@@ -53,7 +58,7 @@ public final class StructuredRegionBuilder {
 			return null;
 		}
 
-		List<BlockNode> postLoopBlocks = collectPostLoopBlocks(mth, componentBlocks);
+		List<BlockNode> postLoopBlocks = collectPostLoopBlocks(mth, componentBlocks, outerHeader);
 		Set<BlockNode> postLoopSet = new HashSet<>(postLoopBlocks);
 		List<BlockNode> preambleBlocks = collectPreambleBlocks(mth, componentBlocks, postLoopSet);
 		Map<Integer, BlockNode> resumeEntryByLabel = collectResumeEntries(component, outerHeader, innerHeader);
@@ -73,37 +78,38 @@ public final class StructuredRegionBuilder {
 
 		Set<BlockNode> loopBodyStops = new HashSet<>(postLoopBlocks);
 		loopBodyStops.add(outerHeader);
-		loopBodyStops.add(innerHeader);
 		for (BlockNode block : mth.getBasicBlocks()) {
 			if (!componentBlocks.contains(block) && block.getStartOffset() != -1) {
 				loopBodyStops.add(block);
 			}
 		}
 
-		Set<BlockNode> innerBodyStops = new HashSet<>(loopBodyStops);
-		if (innerExitToOuter != null) {
-			innerBodyStops.add(innerExitToOuter);
-		}
-
 		StructuredBlockRegionBuilder preambleBuilder = new StructuredBlockRegionBuilder(mth, preambleStops, false);
-		StructuredBlockRegionBuilder outerBodyBuilder = new StructuredBlockRegionBuilder(mth, loopBodyStops, true);
-		StructuredBlockRegionBuilder innerBodyBuilder = new StructuredBlockRegionBuilder(mth, innerBodyStops, true);
+		StructuredBlockRegionBuilder loopBodyBuilder = new StructuredBlockRegionBuilder(mth, loopBodyStops, false);
 		Region preambleRegion = preambleBuilder.buildFrom(null, mth.getEnterBlock());
+
+		LoopLabelAttr outerLabel = new LoopLabelAttr(outerLoop);
+		outerHeader.addAttr(outerLabel);
 
 		Region root = new Region(null);
 		root.add(new CoroutineDispatchRegion(root, preambleRegion));
-		Region outerBodyRegion = outerBodyBuilder.buildFrom(root, BlockUtils.getLoopBodyEntry(outerHeader));
-		Region innerBodyRegion = innerBodyBuilder.buildFrom(root, BlockUtils.getLoopBodyEntry(innerHeader));
+		Region loopBodyRegion = loopBodyBuilder.buildFrom(root, BlockUtils.getLoopBodyEntry(outerHeader));
 		root.add(new MultiEntryLoopRegion(
 				root,
+				outerLoop,
 				outerHeader,
-				innerHeader,
-				innerExitToOuter,
 				innerExitsToOuter,
-				outerBodyRegion,
-				innerBodyRegion));
+				loopBodyRegion));
 		BlockNode postStart = postLoopBlocks.isEmpty() ? null : postLoopBlocks.get(0);
-		Region post = preambleBuilder.buildFrom(root, postStart);
+		Set<BlockNode> postStops = new HashSet<>(componentBlocks);
+		postStops.add(outerHeader);
+		for (BlockNode block : mth.getBasicBlocks()) {
+			if (!componentBlocks.contains(block) && block.getStartOffset() != -1 && !postLoopSet.contains(block)) {
+				postStops.add(block);
+			}
+		}
+		StructuredBlockRegionBuilder postBuilder = new StructuredBlockRegionBuilder(mth, postStops, false);
+		Region post = postBuilder.buildFrom(root, postStart);
 		root.add(post);
 		mth.addAttr(attr);
 		return root;
@@ -188,28 +194,50 @@ public final class StructuredRegionBuilder {
 		return preamble;
 	}
 
-	private static List<BlockNode> collectPostLoopBlocks(MethodNode mth, Set<BlockNode> componentBlocks) {
-		Set<BlockNode> post = new LinkedHashSet<>();
-		for (BlockNode block : mth.getBasicBlocks()) {
-			if (componentBlocks.contains(block) || block.getStartOffset() == -1) {
-				continue;
-			}
-			if (isReachableFromComponentExit(block, componentBlocks)) {
-				post.add(block);
-			}
+	private static List<BlockNode> collectPostLoopBlocks(
+			MethodNode mth,
+			Set<BlockNode> componentBlocks,
+			BlockNode outerHeader) {
+		BlockNode postEntry = findOuterLoopPostEntry(outerHeader, componentBlocks);
+		if (postEntry == null) {
+			return List.of();
 		}
+		Set<BlockNode> post = new LinkedHashSet<>();
+		collectOutsideComponent(post, postEntry, componentBlocks);
 		return sortBlocks(post);
 	}
 
-	private static boolean isReachableFromComponentExit(BlockNode target, Set<BlockNode> componentBlocks) {
-		for (BlockNode block : componentBlocks) {
-			for (BlockNode successor : block.getSuccessors()) {
-				if (successor == target && !componentBlocks.contains(successor)) {
-					return true;
+	private static @Nullable BlockNode findOuterLoopPostEntry(BlockNode outerHeader, Set<BlockNode> componentBlocks) {
+		InsnNode lastInsn = BlockUtils.getLastInsn(outerHeader);
+		if (!(lastInsn instanceof IfNode)) {
+			return null;
+		}
+		IfNode ifInsn = (IfNode) lastInsn;
+		for (BlockNode branch : new BlockNode[] { ifInsn.getThenBlock(), ifInsn.getElseBlock() }) {
+			BlockNode target = BlockUtils.followEmptyPath(branch);
+			if (target != null && !componentBlocks.contains(target)) {
+				return target;
+			}
+		}
+		return null;
+	}
+
+	private static void collectOutsideComponent(Set<BlockNode> post, BlockNode start, Set<BlockNode> componentBlocks) {
+		ArrayDeque<BlockNode> queue = new ArrayDeque<>();
+		Set<BlockNode> visited = new HashSet<>();
+		queue.add(start);
+		while (!queue.isEmpty()) {
+			BlockNode block = queue.poll();
+			if (!visited.add(block) || componentBlocks.contains(block) || block.getStartOffset() == -1) {
+				continue;
+			}
+			post.add(block);
+			for (BlockNode succ : block.getSuccessors()) {
+				if (!componentBlocks.contains(succ)) {
+					queue.add(succ);
 				}
 			}
 		}
-		return false;
 	}
 
 	private static List<BlockNode> sortBlocks(Set<BlockNode> blocks) {
