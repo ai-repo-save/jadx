@@ -21,6 +21,8 @@ public final class IfInfo {
 	private final Set<BlockNode> skipBlocks;
 	private final List<InsnNode> forceInlineInsns;
 	private @Nullable BlockNode outBlock;
+	private boolean thenContinue;
+	private boolean thenReturn;
 
 	public IfInfo(MethodNode mth, IfCondition condition, BlockNode thenBlock, BlockNode elseBlock) {
 		this(mth, condition, thenBlock, elseBlock, BlockSet.empty(mth), new HashSet<>(), new ArrayList<>());
@@ -29,6 +31,8 @@ public final class IfInfo {
 	public IfInfo(IfInfo info, BlockNode thenBlock, BlockNode elseBlock) {
 		this(info.getMth(), info.getCondition(), thenBlock, elseBlock,
 				info.getMergedBlocks(), info.getSkipBlocks(), info.getForceInlineInsns());
+		this.thenContinue = info.thenContinue;
+		this.thenReturn = info.thenReturn;
 	}
 
 	private IfInfo(MethodNode mth, IfCondition condition, BlockNode thenBlock, BlockNode elseBlock,
@@ -92,6 +96,22 @@ public final class IfInfo {
 
 	public void setOutBlock(@Nullable BlockNode outBlock) {
 		this.outBlock = outBlock;
+	}
+
+	public boolean isThenContinue() {
+		return thenContinue;
+	}
+
+	public void setThenContinue(boolean thenContinue) {
+		this.thenContinue = thenContinue;
+	}
+
+	public boolean isThenReturn() {
+		return thenReturn;
+	}
+
+	public void setThenReturn(boolean thenReturn) {
+		this.thenReturn = thenReturn;
 	}
 
 	public List<InsnNode> getForceInlineInsns() {
