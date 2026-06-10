@@ -280,6 +280,12 @@ public final class TypeUpdate {
 			return REJECT;
 		}
 		var updateCallback = new ArgsListUpdateCallback<>(this, updateInfo, ssaVar.getUseList(), candidateType, true);
+		if (immutableType != null && immutableType.equals(candidateType)) {
+			// Skip invoke receiver uses: InvokeUpdateCallback back-prop causes rollback loops on
+			// methods with many virtual calls (e.g. ConstraintWidget.addToSolver). Other listeners
+			// (IF, MOVE, ...) still run; invoke operands are typed from the call signature.
+			updateCallback.setArgsFilter(use -> !isInvokeReceiverUse(use));
+		}
 		updateCallback.setFinalResultCallback(result -> {
 			if (result == REJECT) {
 				// rollback update for all registers in current SSA var
@@ -424,16 +430,6 @@ public final class TypeUpdate {
 			TypeUtils typeUtils = root.getTypeUtils();
 			Set<ArgType> knownTypeVars = typeUtils.getKnownTypeVarsAtMethod(updateInfo.getMth());
 			Map<ArgType, ArgType> typeVarsMap = typeUtils.getTypeVariablesMapping(candidateType);
-			if (arg instanceof RegisterArg
-					&& updateInfo.getFlags().isIgnoreSame()) {
-				SSAVar instVar = ((RegisterArg) arg).getSVar();
-				if (instVar.getImmutableType() != null
-						&& instVar.getAssign().contains(AFlag.METHOD_ARGUMENT)
-						&& typeVarsMap.isEmpty()) {
-					// setImmutableType path: skip generic back-prop from concrete method parameters
-					return CHANGED;
-				}
-			}
 
 			ArgType returnType = methodDetails.getReturnType();
 			List<ArgType> argTypes = methodDetails.getArgTypes();
@@ -454,6 +450,14 @@ public final class TypeUpdate {
 					.runQueue();
 		}
 		return SAME;
+	}
+
+	private static boolean isInvokeReceiverUse(RegisterArg use) {
+		InsnNode insn = use.getParentInsn();
+		if (!(insn instanceof BaseInvokeNode)) {
+			return false;
+		}
+		return ((BaseInvokeNode) insn).getInstanceArg() == use;
 	}
 
 	private TypeUpdateResult sameFirstArgListener(TypeUpdateInfo updateInfo, InsnNode insn, InsnArg arg, ArgType candidateType) {
