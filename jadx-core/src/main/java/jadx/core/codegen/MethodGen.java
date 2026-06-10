@@ -19,6 +19,7 @@ import jadx.api.plugins.input.data.attributes.JadxAttrType;
 import jadx.api.plugins.input.data.attributes.types.AnnotationMethodParamsAttr;
 import jadx.core.Consts;
 import jadx.core.Jadx;
+import jadx.core.codegen.kotlin.KotlinTypeGen;
 import jadx.core.codegen.utils.CodeGenUtils;
 import jadx.core.dex.attributes.AFlag;
 import jadx.core.dex.attributes.AType;
@@ -79,6 +80,9 @@ public class MethodGen {
 	}
 
 	public boolean addDefinition(ICodeWriter code) {
+		if (classGen.isKotlinOutput()) {
+			return addKotlinDefinition(code);
+		}
 		if (mth.getMethodInfo().isClassInit()) {
 			code.startLine();
 			code.attachDefinition(mth);
@@ -161,6 +165,148 @@ public class MethodGen {
 			}
 		}
 		return true;
+	}
+
+	private boolean addKotlinDefinition(ICodeWriter code) {
+		if (mth.getMethodInfo().isClassInit()) {
+			code.startLine();
+			code.attachDefinition(mth);
+			code.add("init");
+			return true;
+		}
+		if (mth.contains(AFlag.ANONYMOUS_CONSTRUCTOR)) {
+			code.startLine();
+			code.attachDefinition(mth);
+			return false;
+		}
+		if (Consts.DEBUG_USAGE) {
+			ClassGen.addMthUsageInfo(code, mth);
+		}
+		addOverrideAnnotation(code, mth);
+		annotationGen.addForMethod(code, mth);
+
+		AccessInfo clsAccFlags = mth.getParentClass().getAccessFlags();
+		AccessInfo ai = mth.getAccessFlags();
+		if (classGen.isKotlinCompanionGen()) {
+			ai = ai.remove(AccessFlags.STATIC);
+		}
+		if (clsAccFlags.isInterface()) {
+			ai = ai.remove(AccessFlags.ABSTRACT);
+			ai = ai.remove(AccessFlags.PUBLIC);
+		}
+		if (clsAccFlags.isAnnotation()) {
+			ai = ai.remove(AccessFlags.PUBLIC);
+		}
+		if (mth.getMethodInfo().hasAlias() && !ai.isConstructor()) {
+			CodeGenUtils.addRenamedComment(code, mth, mth.getName());
+		}
+		if (mth.contains(AFlag.INCONSISTENT_CODE) && mth.checkCommentsLevel(CommentsLevel.ERROR)) {
+			code.startLine("/*");
+			code.incIndent();
+			code.startLine("Code decompiled incorrectly, please refer to instructions dump.");
+			if (!mth.root().getArgs().isShowInconsistentCode()) {
+				if (code.isMetadataSupported()) {
+					code.startLine("To view partially-correct code enable 'Show inconsistent code' option in preferences");
+				} else {
+					code.startLine("To view partially-correct add '--show-bad-code' argument");
+				}
+			}
+			code.decIndent();
+			code.startLine("*/");
+		}
+
+		code.startLineWithNum(mth.getSourceLine());
+		if (!ai.isConstructor() || classGen.isKotlinCompanionGen()) {
+			code.add(ai.makeString(mth.checkCommentsLevel(CommentsLevel.INFO)));
+		}
+
+		if (classGen.addGenericTypeParameters(code, mth.getTypeParameters(), false)) {
+			code.add(' ');
+		}
+		if (ai.isConstructor()) {
+			code.attachDefinition(mth);
+			code.add("constructor");
+		} else {
+			code.add("fun ");
+			MethodNode defMth = getMethodForDefinition();
+			code.attachDefinition(defMth);
+			code.add(defMth.getAlias());
+		}
+		code.add('(');
+		addKotlinMethodArguments(code);
+		code.add(')');
+		if (!ai.isConstructor()) {
+			ArgType retType = mth.getReturnType();
+			if (!KotlinTypeGen.isVoid(retType)) {
+				code.add(": ");
+				classGen.useType(code, retType);
+			}
+		}
+
+		annotationGen.addThrows(mth, code);
+
+		if (mth.getParentClass().getAccessFlags().isAnnotation()) {
+			EncodedValue def = annotationGen.getAnnotationDefaultValue(mth);
+			if (def != null) {
+				code.add(" = ");
+				annotationGen.encodeValue(mth.root(), code, def);
+			}
+		}
+		return true;
+	}
+
+	private void addKotlinMethodArguments(ICodeWriter code) {
+		List<RegisterArg> args = mth.getArgRegs();
+		AnnotationMethodParamsAttr paramsAnnotation = mth.get(JadxAttrType.ANNOTATION_MTH_PARAMETERS);
+		int argNum = -1;
+		int lastArgNum = args.size() - 1;
+		boolean first = true;
+		for (RegisterArg mthArg : args) {
+			argNum++;
+			if (SkipMethodArgsAttr.isSkip(mth, argNum)) {
+				continue;
+			}
+			if (first) {
+				first = false;
+			} else {
+				code.add(", ");
+			}
+			SSAVar ssaVar = mthArg.getSVar();
+			CodeVar var;
+			if (ssaVar == null) {
+				var = CodeVar.fromMthArg(mthArg, classGen.isFallbackMode());
+			} else {
+				var = ssaVar.getCodeVar();
+			}
+			if (paramsAnnotation != null) {
+				annotationGen.addForParameter(code, paramsAnnotation, argNum);
+			}
+			ArgType argType;
+			ArgType varType = var.getType();
+			if (varType == null || varType == ArgType.UNKNOWN) {
+				argType = mthArg.getInitType();
+			} else {
+				argType = varType;
+			}
+			String varName = nameGen.assignArg(var);
+			if (code.isMetadataSupported() && ssaVar != null) {
+				code.attachDefinition(VarNode.get(mth, var));
+			}
+			code.add(varName);
+			code.add(": ");
+			if (argNum == lastArgNum && mth.getAccessFlags().isVarArgs()) {
+				if (argType.isArray()) {
+					ArgType elType = argType.getArrayElement();
+					classGen.useType(code, elType);
+					code.add("...");
+				} else {
+					mth.addWarnComment("Last argument in varargs method is not array: " + var);
+					classGen.useType(code, argType);
+				}
+			} else {
+				classGen.useType(code, argType);
+			}
+		}
 	}
 
 	private MethodNode getMethodForDefinition() {
