@@ -22,9 +22,8 @@ public class RegionMakerVisitor extends AbstractVisitor {
 		if (mth.isNoCode() || mth.getBasicBlocks().isEmpty()) {
 			return;
 		}
-		boolean structured = mth.contains(AType.STRUCTURED_COROUTINE) && mth.getRegion() != null;
 		RegionMaker rm = new RegionMaker(mth);
-		if (!structured) {
+		if (mth.getRegion() == null) {
 			mth.setRegion(rm.makeMthRegion());
 		}
 		if (!mth.isNoExceptionHandlers()) {

@@ -13,9 +13,10 @@ import jadx.core.dex.nodes.InsnNode;
 import jadx.core.dex.visitors.kotlin.coroutine.SuspendPoint;
 
 /**
- * Kotlin coroutine state machine model: detection fingerprints plus label dispatch and suspend sites.
+ * Kotlin CPS state-machine model extracted from bytecode: label dispatch map and suspend sites.
+ * This is not a suspend-function marker and not a region-transform marker.
  */
-public final class KotlinCoroutineAttr implements IJadxAttribute {
+public final class StateMachineAttr implements IJadxAttribute {
 
 	public static final String RESUME_BEFORE_INVOKE_MSG = "call to 'resume' before 'invoke' with coroutine";
 
@@ -26,7 +27,7 @@ public final class KotlinCoroutineAttr implements IJadxAttribute {
 	private final Map<Integer, BlockNode> labelToResumeBlock;
 	private final List<SuspendPoint> suspendPoints;
 
-	public KotlinCoroutineAttr(
+	public StateMachineAttr(
 			ClassInfo continuationClass,
 			FieldInfo labelField,
 			InsnNode suspendedMarkerInsn,
@@ -66,7 +67,7 @@ public final class KotlinCoroutineAttr implements IJadxAttribute {
 	}
 
 	@Override
-	public AType<KotlinCoroutineAttr> getAttrType() {
-		return AType.KOTLIN_COROUTINE;
+	public AType<StateMachineAttr> getAttrType() {
+		return AType.STATE_MACHINE;
 	}
 }

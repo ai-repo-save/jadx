@@ -11,7 +11,7 @@ import org.junit.jupiter.api.Test;
 
 import jadx.api.JadxInternalAccess;
 import jadx.core.dex.attributes.AType;
-import jadx.core.dex.attributes.nodes.StructuredCoroutineAttr;
+import jadx.core.dex.visitors.regions.structured.StructuredRegionUtils;
 import jadx.core.dex.nodes.ClassNode;
 import jadx.core.dex.nodes.MethodNode;
 import jadx.core.dex.nodes.RootNode;
@@ -30,9 +30,8 @@ public class TestTiktokStructuredDecompile extends SmaliTest {
 		allowWarnInCode();
 		enableDeobfuscation();
 		MethodNode mth = loadProcessedTargetMethod();
-		assertThat(mth.contains(AType.STRUCTURED_COROUTINE)).isTrue();
-		StructuredCoroutineAttr attr = mth.get(AType.STRUCTURED_COROUTINE);
-		assertThat(attr.getPostLoopBlocks()).isNotEmpty();
+		assertThat(mth.contains(AType.STATE_MACHINE)).isTrue();
+		assertThat(StructuredRegionUtils.hasMultiEntryLoopRegion(mth)).isTrue();
 		assertThat(mth.getRegion()).isNotNull();
 		AtomicReference<MultiEntryLoopRegion> loopRegion = new AtomicReference<>();
 		RegionUtils.visitRegions(mth, mth.getRegion(), region -> {

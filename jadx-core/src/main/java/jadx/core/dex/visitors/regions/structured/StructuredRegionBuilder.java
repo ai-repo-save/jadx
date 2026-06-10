@@ -15,8 +15,7 @@ import jadx.core.dex.attributes.AFlag;
 import jadx.core.dex.attributes.AType;
 import jadx.core.dex.attributes.nodes.LoopInfo;
 import jadx.core.dex.attributes.nodes.LoopLabelAttr;
-import jadx.core.dex.attributes.nodes.KotlinCoroutineAttr;
-import jadx.core.dex.attributes.nodes.StructuredCoroutineAttr;
+import jadx.core.dex.attributes.nodes.StateMachineAttr;
 import jadx.core.dex.instructions.IfNode;
 import jadx.core.dex.instructions.InsnType;
 import jadx.core.dex.nodes.BlockNode;
@@ -34,11 +33,14 @@ public final class StructuredRegionBuilder {
 	}
 
 	public static @Nullable Region build(MethodNode mth) {
-		KotlinCoroutineAttr coroutine = mth.get(AType.KOTLIN_COROUTINE);
-		if (coroutine == null) {
+		StateMachineAttr stateMachine = mth.get(AType.STATE_MACHINE);
+		if (stateMachine == null) {
 			return null;
 		}
-		GraphShapeClassifier.Component component = CoroutinePatternDetector.findPrimaryMultiEntryComponent(mth);
+		if (!NestedMultiEntryLoopDetector.matches(mth)) {
+			return null;
+		}
+		GraphShapeClassifier.Component component = NestedMultiEntryLoopDetector.findPrimaryMultiEntryComponent(mth);
 		if (component == null || !matchesSharedLoopShape(component)) {
 			return null;
 		}
@@ -65,19 +67,9 @@ public final class StructuredRegionBuilder {
 		List<BlockNode> postLoopBlocks = collectPostLoopBlocks(mth, componentBlocks, outerHeader);
 		Set<BlockNode> postLoopSet = new HashSet<>(postLoopBlocks);
 		List<BlockNode> preambleBlocks = collectPreambleBlocks(mth, componentBlocks, postLoopSet);
-		Map<Integer, BlockNode> resumeEntryByLabel = coroutine.getLabelToResumeBlock();
+		Map<Integer, BlockNode> resumeEntryByLabel = stateMachine.getLabelToResumeBlock();
 		Integer innerResumeLabel = findLabelForHeader(resumeEntryByLabel, innerHeader);
 		Integer outerResumeLabel = findLabelForHeader(resumeEntryByLabel, outerHeader);
-
-		StructuredCoroutineAttr attr = new StructuredCoroutineAttr(
-				outerHeader,
-				innerHeader,
-				innerExitToOuter,
-				innerResumeLabel != null ? resumeEntryByLabel.get(innerResumeLabel) : null,
-				outerResumeLabel != null ? resumeEntryByLabel.get(outerResumeLabel) : null,
-				preambleBlocks,
-				resumeEntryByLabel,
-				postLoopBlocks);
 
 		Set<BlockNode> preambleStops = new HashSet<>(componentBlocks);
 		preambleStops.addAll(postLoopBlocks);
@@ -117,7 +109,6 @@ public final class StructuredRegionBuilder {
 		StructuredBlockRegionBuilder postBuilder = new StructuredBlockRegionBuilder(mth, postStops, false);
 		Region post = postBuilder.buildFrom(root, postStart);
 		root.add(post);
-		mth.addAttr(attr);
 		return root;
 	}
 

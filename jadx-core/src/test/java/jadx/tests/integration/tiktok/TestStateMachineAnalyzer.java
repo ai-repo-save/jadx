@@ -4,24 +4,24 @@ import org.junit.jupiter.api.Test;
 
 import jadx.api.JadxInternalAccess;
 import jadx.core.dex.attributes.AType;
-import jadx.core.dex.attributes.nodes.KotlinCoroutineAttr;
+import jadx.core.dex.attributes.nodes.StateMachineAttr;
 import jadx.core.dex.nodes.MethodNode;
 import jadx.core.dex.nodes.RootNode;
-import jadx.core.dex.visitors.kotlin.coroutine.KotlinCoroutineAnalyzer;
+import jadx.core.dex.visitors.kotlin.coroutine.StateMachineAnalyzer;
 import jadx.tests.api.SmaliTest;
 
 import static jadx.tests.api.utils.assertj.JadxAssertions.assertThat;
 
-public class TestKotlinCoroutineAnalyzer extends SmaliTest {
+public class TestStateMachineAnalyzer extends SmaliTest {
 
 	@Test
 	public void detectsTiktokLizStateMachine() {
 		allowWarnInCode();
 		MethodNode mth = loadLizMethod();
-		assertThat(KotlinCoroutineAnalyzer.diagnose(mth)).isEqualTo("ok");
-		assertThat(mth.contains(AType.KOTLIN_COROUTINE)).isTrue();
+		assertThat(StateMachineAnalyzer.diagnose(mth)).isEqualTo("ok");
+		assertThat(mth.contains(AType.STATE_MACHINE)).isTrue();
 
-		KotlinCoroutineAttr attr = mth.get(AType.KOTLIN_COROUTINE);
+		StateMachineAttr attr = mth.get(AType.STATE_MACHINE);
 		assertThat(attr.getLabelField().getType()).isEqualTo(jadx.core.dex.instructions.args.ArgType.INT);
 		assertThat(attr.getLabelToResumeBlock()).containsKeys(0, 1, 2, 3);
 		assertThat(attr.getSuspendPoints()).isNotEmpty();
@@ -32,8 +32,8 @@ public class TestKotlinCoroutineAnalyzer extends SmaliTest {
 	public void standaloneAnalyzerMatchesVisitor() {
 		allowWarnInCode();
 		MethodNode mth = loadLizMethod();
-		KotlinCoroutineAttr fromVisitor = mth.get(AType.KOTLIN_COROUTINE);
-		KotlinCoroutineAttr fromAnalyzer = KotlinCoroutineAnalyzer.analyze(mth);
+		StateMachineAttr fromVisitor = mth.get(AType.STATE_MACHINE);
+		StateMachineAttr fromAnalyzer = StateMachineAnalyzer.analyze(mth);
 		assertThat(fromAnalyzer).isNotNull();
 		assertThat(fromAnalyzer.getLabelToResumeBlock()).isEqualTo(fromVisitor.getLabelToResumeBlock());
 		assertThat(fromAnalyzer.getSuspendPoints().size()).isEqualTo(fromVisitor.getSuspendPoints().size());
