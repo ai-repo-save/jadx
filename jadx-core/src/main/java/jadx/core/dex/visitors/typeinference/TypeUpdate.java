@@ -281,9 +281,11 @@ public final class TypeUpdate {
 		}
 		var updateCallback = new ArgsListUpdateCallback<>(this, updateInfo, ssaVar.getUseList(), candidateType, true);
 		if (immutableType != null && immutableType.equals(candidateType)) {
-			// Skip invoke receiver uses: InvokeUpdateCallback back-prop causes rollback loops on
-			// methods with many virtual calls (e.g. ConstraintWidget.addToSolver). Other listeners
-			// (IF, MOVE, ...) still run; invoke operands are typed from the call signature.
+			// Applying an immutable type is asserting a known fact (method signature / this type),
+			// not inferring it from usages. Fan-out must still reach IF/MOVE listeners, but must
+			// NOT run invokeListener's InvokeUpdateCallback on the receiver: that path is generic
+			// inference (receiver -> other operands) and is redundant once the receiver type is
+			// fixed — InvokeNode already typed every operand from the call signature at decode time.
 			updateCallback.setArgsFilter(use -> !isInvokeReceiverUse(use));
 		}
 		updateCallback.setFinalResultCallback(result -> {
