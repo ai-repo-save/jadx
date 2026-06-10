@@ -246,6 +246,19 @@ public final class TypeInferenceVisitor extends AbstractVisitor {
 				}
 				break;
 
+			case MOVE:
+			case MOVE_MULTI:
+				InsnArg moveSrc = insn.getArg(0);
+				if (moveSrc.isRegister()) {
+					ArgType srcImm = ((RegisterArg) moveSrc).getSVar().getImmutableType();
+					if (srcImm != null) {
+						addBound(typeInfo, new TypeBoundConst(BoundEnum.ASSIGN, srcImm));
+						break;
+					}
+				}
+				addBound(typeInfo, new TypeBoundConst(BoundEnum.ASSIGN, assign.getInitType()));
+				break;
+
 			default:
 				ArgType type = insn.getResult().getInitType();
 				addBound(typeInfo, new TypeBoundConst(BoundEnum.ASSIGN, type));
@@ -305,6 +318,11 @@ public final class TypeInferenceVisitor extends AbstractVisitor {
 		}
 		if (insn.getType() == InsnType.CHECK_CAST && insn.contains(AFlag.SOFT_CAST)) {
 			// ignore
+			return null;
+		}
+		InsnType insnType = insn.getType();
+		if (insnType == InsnType.MOVE || insnType == InsnType.MOVE_MULTI) {
+			// MOVE uses UNKNOWN_OBJECT init type from decoder; equality is handled by moveListener
 			return null;
 		}
 		return new TypeBoundConst(BoundEnum.USE, regArg.getInitType(), regArg);
