@@ -31,7 +31,8 @@ public class CheckRegions extends AbstractVisitor {
 		if (mth.isNoCode()
 				|| mth.getRegion() == null
 				|| mth.getBasicBlocks().isEmpty()
-				|| mth.contains(AType.JADX_ERROR)) {
+				|| mth.contains(AType.JADX_ERROR)
+				|| mth.contains(AType.STRUCTURED_COROUTINE)) {
 			return;
 		}
 
