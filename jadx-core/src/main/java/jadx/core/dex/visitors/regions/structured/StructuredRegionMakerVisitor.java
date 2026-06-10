@@ -28,6 +28,6 @@ public class StructuredRegionMakerVisitor extends AbstractVisitor {
 	}
 
 	public static boolean isStructured(MethodNode mth) {
-		return mth.contains(AType.STRUCTURED_COROUTINE);
+		return StructuredRegionUtils.isStructuredMethod(mth);
 	}
 }

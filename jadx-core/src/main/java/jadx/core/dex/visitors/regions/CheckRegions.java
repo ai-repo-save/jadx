@@ -20,6 +20,7 @@ import jadx.core.dex.nodes.InsnNode;
 import jadx.core.dex.nodes.MethodNode;
 import jadx.core.dex.regions.loops.LoopRegion;
 import jadx.core.dex.visitors.AbstractVisitor;
+import jadx.core.dex.visitors.regions.structured.StructuredRegionUtils;
 import jadx.core.utils.exceptions.CodegenException;
 import jadx.core.utils.exceptions.JadxException;
 
@@ -32,7 +33,7 @@ public class CheckRegions extends AbstractVisitor {
 				|| mth.getRegion() == null
 				|| mth.getBasicBlocks().isEmpty()
 				|| mth.contains(AType.JADX_ERROR)
-				|| mth.contains(AType.STRUCTURED_COROUTINE)) {
+				|| StructuredRegionUtils.hasMultiEntryLoopRegion(mth)) {
 			return;
 		}
 

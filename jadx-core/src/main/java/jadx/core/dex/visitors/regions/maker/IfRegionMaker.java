@@ -331,7 +331,7 @@ final class IfRegionMaker {
 	 * Keep the return block inside the if-region instead of treating the loop-header branch as outBlock.
 	 */
 	private @Nullable IfInfo restructureCoroutineSuspendIf(IfInfo info) {
-		if (!mth.contains(AType.KOTLIN_COROUTINE) && !mth.contains(AType.STRUCTURED_COROUTINE)) {
+		if (!mth.contains(AType.STATE_MACHINE)) {
 			return null;
 		}
 		BlockNode thenBlock = info.getThenBlock();

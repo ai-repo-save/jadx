@@ -34,8 +34,8 @@ import jadx.core.dex.attributes.nodes.RegionRefAttr;
 import jadx.core.dex.attributes.nodes.RenameReasonAttr;
 import jadx.core.dex.attributes.nodes.SkipMethodArgsAttr;
 import jadx.core.dex.attributes.nodes.SpecialEdgeAttr;
-import jadx.core.dex.attributes.nodes.KotlinCoroutineAttr;
-import jadx.core.dex.attributes.nodes.StructuredCoroutineAttr;
+import jadx.core.dex.attributes.nodes.StateMachineAttr;
+import jadx.core.dex.attributes.nodes.SuspendFunctionAttr;
 import jadx.core.dex.attributes.nodes.TmpEdgeAttr;
 import jadx.core.dex.nodes.IMethodDetails;
 import jadx.core.dex.trycatch.CatchAttr;
@@ -83,8 +83,8 @@ public final class AType<T extends IJadxAttribute> implements IJadxAttrType<T> {
 	public static final AType<AttrList<TryCatchBlockAttr>> TRY_BLOCKS_LIST = new AType<>();
 	public static final AType<CodeFeaturesAttr> METHOD_CODE_FEATURES = new AType<>();
 	public static final AType<MethodThrowsAttr> METHOD_THROWS = new AType<>();
-	public static final AType<KotlinCoroutineAttr> KOTLIN_COROUTINE = new AType<>();
-	public static final AType<StructuredCoroutineAttr> STRUCTURED_COROUTINE = new AType<>();
+	public static final AType<SuspendFunctionAttr> SUSPEND_FUNCTION = new AType<>();
+	public static final AType<StateMachineAttr> STATE_MACHINE = new AType<>();
 
 	// region
 	public static final AType<DeclareVariablesAttr> DECLARE_VARIABLES = new AType<>();

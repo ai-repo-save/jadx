@@ -11,7 +11,7 @@ import java.util.Set;
 
 import org.jetbrains.annotations.Nullable;
 
-import jadx.core.dex.attributes.nodes.KotlinCoroutineAttr;
+import jadx.core.dex.attributes.nodes.StateMachineAttr;
 import jadx.core.dex.info.ClassInfo;
 import jadx.core.dex.info.FieldInfo;
 import jadx.core.dex.instructions.ArithNode;
@@ -35,13 +35,13 @@ import jadx.core.utils.BlockUtils;
 import jadx.core.utils.InsnUtils;
 
 /**
- * Detects Kotlin coroutine state machines and extracts label dispatch + suspend sites in one pass.
+ * Extracts Kotlin CPS state-machine structure from bytecode: label dispatch and suspend sites.
  */
-public final class KotlinCoroutineAnalyzer {
+public final class StateMachineAnalyzer {
 
 	private static final int LABEL_SUSPENDED_BIT = Integer.MIN_VALUE;
 
-	private KotlinCoroutineAnalyzer() {
+	private StateMachineAnalyzer() {
 	}
 
 	public static String diagnose(MethodNode mth) {
@@ -69,7 +69,7 @@ public final class KotlinCoroutineAnalyzer {
 		return "ok";
 	}
 
-	public static @Nullable KotlinCoroutineAttr analyze(MethodNode mth) {
+	public static @Nullable StateMachineAttr analyze(MethodNode mth) {
 		if (mth.isNoCode() || mth.getBasicBlocks().isEmpty()) {
 			return null;
 		}
@@ -99,7 +99,7 @@ public final class KotlinCoroutineAnalyzer {
 		if (continuationFromCast != null) {
 			continuationClass = continuationFromCast;
 		}
-		return new KotlinCoroutineAttr(
+		return new StateMachineAttr(
 				continuationClass,
 				labelField,
 				suspendedMarkerInsn,
@@ -648,7 +648,7 @@ public final class KotlinCoroutineAnalyzer {
 		for (InsnNode insn : block.getInstructions()) {
 			if (insn.getType() == InsnType.CONST_STR) {
 				String str = ((ConstStringNode) insn).getString();
-				if (str.contains(KotlinCoroutineAttr.RESUME_BEFORE_INVOKE_MSG)) {
+				if (str.contains(StateMachineAttr.RESUME_BEFORE_INVOKE_MSG)) {
 					return true;
 				}
 			}
