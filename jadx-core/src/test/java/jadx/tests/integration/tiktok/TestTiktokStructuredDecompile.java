@@ -15,7 +15,7 @@ import jadx.core.dex.visitors.regions.structured.StructuredRegionUtils;
 import jadx.core.dex.nodes.ClassNode;
 import jadx.core.dex.nodes.MethodNode;
 import jadx.core.dex.nodes.RootNode;
-import jadx.core.dex.regions.structured.MultiEntryLoopRegion;
+import jadx.core.dex.regions.structured.LabeledOuterLoopRegion;
 import jadx.core.utils.RegionUtils;
 import jadx.tests.api.SmaliTest;
 import jadx.tests.api.compiler.CompilerOptions;
@@ -31,18 +31,18 @@ public class TestTiktokStructuredDecompile extends SmaliTest {
 		enableDeobfuscation();
 		MethodNode mth = loadProcessedTargetMethod();
 		assertThat(mth.contains(AType.STATE_MACHINE)).isTrue();
-		assertThat(StructuredRegionUtils.hasMultiEntryLoopRegion(mth)).isTrue();
+		assertThat(StructuredRegionUtils.hasLabeledOuterLoopRegion(mth)).isTrue();
 		assertThat(mth.getRegion()).isNotNull();
-		AtomicReference<MultiEntryLoopRegion> loopRegion = new AtomicReference<>();
+		AtomicReference<LabeledOuterLoopRegion> loopRegion = new AtomicReference<>();
 		RegionUtils.visitRegions(mth, mth.getRegion(), region -> {
-			if (region instanceof MultiEntryLoopRegion) {
-				loopRegion.set((MultiEntryLoopRegion) region);
+			if (region instanceof LabeledOuterLoopRegion) {
+				loopRegion.set((LabeledOuterLoopRegion) region);
 				return false;
 			}
 			return true;
 		});
 		assertThat(loopRegion.get()).isNotNull();
-		assertThat(loopRegion.get().getOuterBodyRegion().getSubBlocks().size())
+		assertThat(loopRegion.get().getBodyRegion().getSubBlocks().size())
 				.as("structured loop body region")
 				.isGreaterThan(0);
 	}

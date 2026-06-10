@@ -10,7 +10,7 @@ import jadx.core.utils.exceptions.JadxException;
 
 @JadxVisitor(
 		name = "StructuredRegionMakerVisitor",
-		desc = "Build structured coroutine + multi-entry loop regions",
+		desc = "Build structured coroutine regions (dispatch preamble + labeled outer loop)",
 		runBefore = RegionMakerVisitor.class
 )
 public class StructuredRegionMakerVisitor extends AbstractVisitor {

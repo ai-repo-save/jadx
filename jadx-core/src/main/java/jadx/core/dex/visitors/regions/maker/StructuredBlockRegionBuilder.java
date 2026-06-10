@@ -17,7 +17,7 @@ import jadx.core.dex.regions.Region;
 import jadx.core.utils.BlockUtils;
 
 /**
- * Builds structured regions for coroutine/multi-entry loop methods without full RegionMaker overflow.
+ * Builds structured regions for coroutine methods without full RegionMaker overflow.
  */
 public final class StructuredBlockRegionBuilder {
 	private final MethodNode mth;

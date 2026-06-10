@@ -3,7 +3,7 @@ package jadx.core.dex.visitors.regions.structured;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import jadx.core.dex.nodes.MethodNode;
-import jadx.core.dex.regions.structured.MultiEntryLoopRegion;
+import jadx.core.dex.regions.structured.LabeledOuterLoopRegion;
 import jadx.core.utils.RegionUtils;
 
 /**
@@ -14,13 +14,13 @@ public final class StructuredRegionUtils {
 	private StructuredRegionUtils() {
 	}
 
-	public static boolean hasMultiEntryLoopRegion(MethodNode mth) {
+	public static boolean hasLabeledOuterLoopRegion(MethodNode mth) {
 		if (mth.getRegion() == null) {
 			return false;
 		}
 		AtomicBoolean found = new AtomicBoolean();
 		RegionUtils.visitRegions(mth, mth.getRegion(), region -> {
-			if (region instanceof MultiEntryLoopRegion) {
+			if (region instanceof LabeledOuterLoopRegion) {
 				found.set(true);
 				return false;
 			}
@@ -30,6 +30,6 @@ public final class StructuredRegionUtils {
 	}
 
 	public static boolean isStructuredMethod(MethodNode mth) {
-		return mth.getRegion() != null && hasMultiEntryLoopRegion(mth);
+		return mth.getRegion() != null && hasLabeledOuterLoopRegion(mth);
 	}
 }

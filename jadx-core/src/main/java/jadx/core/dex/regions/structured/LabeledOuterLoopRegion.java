@@ -3,8 +3,6 @@ package jadx.core.dex.regions.structured;
 import java.util.ArrayList;
 import java.util.List;
 
-import org.jetbrains.annotations.Nullable;
-
 import jadx.api.ICodeWriter;
 import jadx.core.codegen.ConditionGen;
 import jadx.core.codegen.RegionGen;
@@ -18,10 +16,13 @@ import jadx.core.dex.regions.conditions.IfCondition;
 import jadx.core.utils.exceptions.CodegenException;
 
 /**
- * Outer multi-entry loop with body built via {@link jadx.core.dex.visitors.regions.maker.RegionMaker}
- * (inner loops remain in the body region).
+ * Labeled outer {@code while} whose body is built by {@link jadx.core.dex.visitors.regions.maker.RegionMaker}.
+ * Emits {@code continue outer} when an inner loop exits back to the outer header.
+ * <p>
+ * Multi-entry resume paths and inner loops are handled elsewhere ({@link CoroutineDispatchRegion},
+ * {@link jadx.core.dex.visitors.regions.structured.NestedMultiEntryLoopDetector}).
  */
-public final class MultiEntryLoopRegion extends AbstractRegion {
+public final class LabeledOuterLoopRegion extends AbstractRegion {
 
 	private static final String OUTER_LABEL = "outer";
 
@@ -30,17 +31,11 @@ public final class MultiEntryLoopRegion extends AbstractRegion {
 	private final boolean continueOuterAfterBody;
 	private final Region bodyRegion;
 
-	public Region getOuterBodyRegion() {
+	public Region getBodyRegion() {
 		return bodyRegion;
 	}
 
-	/** @deprecated inner body is included in {@link #getOuterBodyRegion()} */
-	@Deprecated
-	public Region getInnerBodyRegion() {
-		return new Region(null);
-	}
-
-	public MultiEntryLoopRegion(
+	public LabeledOuterLoopRegion(
 			IRegion parent,
 			LoopInfo outerLoop,
 			BlockNode outerHeader,
@@ -88,6 +83,6 @@ public final class MultiEntryLoopRegion extends AbstractRegion {
 
 	@Override
 	public String baseString() {
-		return "MULTI_ENTRY_LOOP(outer=" + outerHeader + ')';
+		return "LABELED_OUTER_LOOP(outer=" + outerHeader + ')';
 	}
 }

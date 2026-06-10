@@ -33,7 +33,7 @@ public class CheckRegions extends AbstractVisitor {
 				|| mth.getRegion() == null
 				|| mth.getBasicBlocks().isEmpty()
 				|| mth.contains(AType.JADX_ERROR)
-				|| StructuredRegionUtils.hasMultiEntryLoopRegion(mth)) {
+				|| StructuredRegionUtils.hasLabeledOuterLoopRegion(mth)) {
 			return;
 		}
 
