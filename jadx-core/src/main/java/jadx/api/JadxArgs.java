@@ -149,7 +149,7 @@ public class JadxArgs implements Closeable {
 	private Set<RenameEnum> renameFlags = EnumSet.allOf(RenameEnum.class);
 
 	public enum OutputFormatEnum {
-		JAVA, JSON
+		JAVA, JSON, KOTLIN
 	}
 
 	private OutputFormatEnum outputFormat = OutputFormatEnum.JAVA;
@@ -672,6 +672,10 @@ public class JadxArgs implements Closeable {
 		return outputFormat == OutputFormatEnum.JSON;
 	}
 
+	public boolean isKotlinOutput() {
+		return outputFormat == OutputFormatEnum.KOTLIN;
+	}
+
 	public void setOutputFormat(OutputFormatEnum outputFormat) {
 		this.outputFormat = outputFormat;
 	}
@@ -852,7 +856,7 @@ public class JadxArgs implements Closeable {
 	 * Hash of all options that can change result code
 	 */
 	public String makeCodeArgsHash(@Nullable JadxDecompiler decompiler) {
-		String argStr = "args:" + decompilationMode + useImports + showInconsistentCode
+		String argStr = "args:" + outputFormat + decompilationMode + useImports + showInconsistentCode
 				+ inlineAnonymousClasses + inlineMethods + moveInnerClasses + allowInlineKotlinLambda
 				+ deobfuscationOn + deobfuscationMinLength + deobfuscationMaxLength + deobfuscationWhitelist
 				+ useSourceNameAsClassNameAlias + sourceNameRepeatLimit

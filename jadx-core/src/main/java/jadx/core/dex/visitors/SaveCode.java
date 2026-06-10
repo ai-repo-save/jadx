@@ -68,6 +68,9 @@ public class SaveCode {
 			case JSON:
 				return ".json";
 
+			case KOTLIN:
+				return ".kt";
+
 			default:
 				throw new JadxRuntimeException("Unknown output format: " + outputFormat);
 		}
