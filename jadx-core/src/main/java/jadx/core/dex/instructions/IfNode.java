@@ -7,9 +7,8 @@ import jadx.core.dex.instructions.args.ArgType;
 import jadx.core.dex.instructions.args.InsnArg;
 import jadx.core.dex.instructions.args.LiteralArg;
 import jadx.core.dex.instructions.args.PrimitiveType;
-import org.jetbrains.annotations.Nullable;
-
 import jadx.core.dex.nodes.BlockNode;
+import org.jetbrains.annotations.Nullable;
 import jadx.core.dex.nodes.InsnNode;
 import jadx.core.utils.InsnUtils;
 

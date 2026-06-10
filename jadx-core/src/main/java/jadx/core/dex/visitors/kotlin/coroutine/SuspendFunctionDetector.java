@@ -14,7 +14,6 @@ import jadx.core.dex.nodes.BlockNode;
 import jadx.core.dex.nodes.ClassNode;
 import jadx.core.dex.nodes.InsnNode;
 import jadx.core.dex.nodes.MethodNode;
-import jadx.core.utils.Utils;
 
 /**
  * Detects Kotlin {@code suspend fun} from JVM signature (Continuation last param, Object return)
@@ -102,18 +101,4 @@ public final class SuspendFunctionDetector {
 		return false;
 	}
 
-	public static @Nullable ArgType getContinuationArgType(MethodNode mth) {
-		SuspendFunctionAttr attr = detect(mth);
-		return attr != null ? attr.getContinuationArgType() : null;
-	}
-
-	public static int getContinuationArgIndex(MethodNode mth) {
-		SuspendFunctionAttr attr = detect(mth);
-		return attr != null ? attr.getContinuationArgIndex() : -1;
-	}
-
-	public static @Nullable ArgType lastArgType(MethodNode mth) {
-		List<ArgType> args = mth.getArgTypes();
-		return args.isEmpty() ? null : Utils.last(args);
-	}
 }

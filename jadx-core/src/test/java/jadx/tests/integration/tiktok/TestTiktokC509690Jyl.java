@@ -281,43 +281,6 @@ public class TestTiktokC509690Jyl extends SmaliTest {
 		return smaliFiles;
 	}
 
-	private static List<Integer> sortedBlockStartOffsets(Component component) {
-		List<Integer> offsets = component.getBlocks().stream()
-				.map(block -> block.getStartOffset())
-				.sorted()
-				.collect(Collectors.toCollection(ArrayList::new));
-		return offsets;
-	}
-
-	private static List<Integer> sortedBlockStartOffsets(ControlFlowComponentGraph.Component component) {
-		List<Integer> offsets = component.getBlocks().stream()
-				.map(block -> block.getStartOffset())
-				.sorted()
-				.collect(Collectors.toCollection(ArrayList::new));
-		return offsets;
-	}
-
-	private static List<Integer> sortedBlockStartOffsets(RegionNode region) {
-		List<Integer> offsets = region.getBlocks().stream()
-				.map(block -> block.getStartOffset())
-				.sorted()
-				.collect(Collectors.toCollection(ArrayList::new));
-		return offsets;
-	}
-
-	private static List<Integer> expectedSharedLoopComponentOffsets() {
-		return List.of(
-				-1, -1, -1,
-				0x003e, 0x0042, 0x0044, 0x004e, 0x0050, 0x0052, 0x005d,
-				0x005f, 0x005f,
-				0x0063, 0x0063, 0x0063, 0x0063, 0x0063,
-				0x0067, 0x0069, 0x007d,
-				0x007f, 0x007f,
-				0x0089,
-				0x008b, 0x008b,
-				0x00c5, 0x00c8, 0x0103);
-	}
-
 	private static List<String> formatBlockOffsets(List<BlockNode> blocks) {
 		return blocks.stream()
 				.map(block -> formatOffset(block.getStartOffset()))

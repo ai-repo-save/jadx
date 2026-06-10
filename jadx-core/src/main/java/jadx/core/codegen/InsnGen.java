@@ -163,51 +163,9 @@ public class InsnGen {
 		if (codeVar.isFinal()) {
 			code.add("final ");
 		}
-		useType(code, resolveVarType(codeVar));
+		useType(code, codeVar.getType());
 		code.add(' ');
 		defVar(code, codeVar);
-	}
-
-	private ArgType resolveVarType(CodeVar codeVar) {
-		ArgType type = codeVar.getType();
-		if (type != null && type.isTypeKnown()) {
-			return type;
-		}
-		ArgType castType = null;
-		ArgType constructorType = null;
-		for (SSAVar ssaVar : codeVar.getSsaVars()) {
-			InsnNode assignInsn = ssaVar.getAssignInsn();
-			if (assignInsn == null) {
-				continue;
-			}
-			if (assignInsn.getType() == InsnType.CHECK_CAST && assignInsn instanceof IndexInsnNode) {
-				ArgType t = ((IndexInsnNode) assignInsn).getIndexAsType();
-				if (t.isTypeKnown()) {
-					castType = t;
-				}
-			} else if (assignInsn.getType() == InsnType.CONSTRUCTOR) {
-				constructorType = ((ConstructorInsn) assignInsn).getClassType().getType();
-			}
-		}
-		if (castType != null) {
-			return castType;
-		}
-		if (constructorType != null) {
-			return constructorType;
-		}
-		for (SSAVar ssaVar : codeVar.getSsaVars()) {
-			ArgType ssaType = ssaVar.getImmutableType();
-			if (ssaType != null && ssaType.isTypeKnown()) {
-				return ssaType;
-			}
-		}
-		for (SSAVar ssaVar : codeVar.getSsaVars()) {
-			ArgType ssaType = ssaVar.getTypeInfo().getType();
-			if (ssaType != null && ssaType.isTypeKnown()) {
-				return ssaType;
-			}
-		}
-		return type != null ? type : ArgType.UNKNOWN;
 	}
 
 	/**
