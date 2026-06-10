@@ -176,6 +176,11 @@ final class IfRegionMaker {
 		BlockNode thenBlock = info.getThenBlock();
 		BlockNode elseBlock = info.getElseBlock();
 
+		IfInfo suspendIf = restructureCoroutineSuspendIf(info);
+		if (suspendIf != null) {
+			return suspendIf;
+		}
+
 		if (Objects.equals(thenBlock, elseBlock)) {
 			IfInfo ifInfo = new IfInfo(info, null, null);
 			ifInfo.setOutBlock(thenBlock);
@@ -319,6 +324,41 @@ final class IfRegionMaker {
 		}
 
 		return true;
+	}
+
+	/**
+	 * Kotlin coroutine suspend: {@code if-ne result, COROUTINE_SUSPENDED, continue} / {@code return result}.
+	 * Keep the return block inside the if-region instead of treating the loop-header branch as outBlock.
+	 */
+	private @Nullable IfInfo restructureCoroutineSuspendIf(IfInfo info) {
+		if (!mth.contains(AType.STRUCTURED_COROUTINE)) {
+			return null;
+		}
+		BlockNode thenBlock = info.getThenBlock();
+		BlockNode elseBlock = info.getElseBlock();
+		if (isCoroutineSuspendReturn(thenBlock) && isLoopContinueBranch(elseBlock)) {
+			IfInfo out = new IfInfo(info, thenBlock, null);
+			out.setOutBlock(elseBlock);
+			return out;
+		}
+		if (isCoroutineSuspendReturn(elseBlock) && isLoopContinueBranch(thenBlock)) {
+			IfInfo out = new IfInfo(IfInfo.invert(info), elseBlock, null);
+			out.setOutBlock(thenBlock);
+			return out;
+		}
+		return null;
+	}
+
+	private static boolean isLoopContinueBranch(@Nullable BlockNode block) {
+		return block != null && block.contains(AFlag.LOOP_START);
+	}
+
+	private static boolean isCoroutineSuspendReturn(@Nullable BlockNode block) {
+		if (block == null || !block.contains(AFlag.RETURN)) {
+			return false;
+		}
+		List<InsnNode> insns = block.getInstructions();
+		return insns.size() == 1 && insns.get(0).getType() == InsnType.RETURN;
 	}
 
 	private static boolean isBadBranchBlock(IfInfo info, BlockNode block) {

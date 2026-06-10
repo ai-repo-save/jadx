@@ -15,6 +15,7 @@ import org.slf4j.LoggerFactory;
 import jadx.core.dex.attributes.AFlag;
 import jadx.core.dex.attributes.AType;
 import jadx.core.dex.attributes.nodes.DeclareVariablesAttr;
+import jadx.core.dex.instructions.IndexInsnNode;
 import jadx.core.dex.instructions.InsnType;
 import jadx.core.dex.instructions.args.ArgType;
 import jadx.core.dex.instructions.args.CodeVar;
@@ -27,6 +28,7 @@ import jadx.core.dex.nodes.IRegion;
 import jadx.core.dex.nodes.InsnNode;
 import jadx.core.dex.nodes.MethodNode;
 import jadx.core.dex.regions.loops.LoopRegion;
+import jadx.core.dex.regions.structured.MultiEntryLoopRegion;
 import jadx.core.dex.visitors.AbstractVisitor;
 import jadx.core.dex.visitors.regions.AbstractRegionVisitor;
 import jadx.core.dex.visitors.regions.DepthRegionTraversal;
@@ -162,10 +164,14 @@ public class ProcessVariables extends AbstractVisitor {
 		int unknownTypesCount = 0;
 		for (CodeVar codeVar : codeVars) {
 			ArgType codeVarType = codeVar.getType();
-			if (codeVarType == null) {
+			if (codeVarType == null || codeVarType == ArgType.UNKNOWN || codeVarType == ArgType.OBJECT) {
 				ArgType inferred = inferCodeVarType(codeVar);
-				codeVar.setType(inferred);
-				if (inferred == ArgType.UNKNOWN) {
+				if (inferred.isTypeKnown()) {
+					codeVar.setType(inferred);
+				} else if (codeVarType == null) {
+					codeVar.setType(ArgType.UNKNOWN);
+					unknownTypesCount++;
+				} else if (codeVarType == ArgType.UNKNOWN) {
 					unknownTypesCount++;
 				}
 			} else {
@@ -273,7 +279,7 @@ public class ProcessVariables extends AbstractVisitor {
 	private static boolean canDeclareAt(VarUsage usage, UsePlace usePlace) {
 		IRegion region = usePlace.getRegion();
 		// workaround for declare variables used in several loops
-		if (region instanceof LoopRegion) {
+		if (region instanceof LoopRegion || region instanceof MultiEntryLoopRegion) {
 			for (UsePlace use : usage.getAssigns()) {
 				if (!RegionUtils.isRegionContainsRegion(region, use.getRegion())) {
 					return false;
@@ -339,6 +345,28 @@ public class ProcessVariables extends AbstractVisitor {
 	}
 
 	private static ArgType inferCodeVarType(CodeVar codeVar) {
+		ArgType castType = null;
+		ArgType constructorType = null;
+		for (SSAVar ssaVar : codeVar.getSsaVars()) {
+			InsnNode assignInsn = ssaVar.getAssignInsn();
+			if (assignInsn == null) {
+				continue;
+			}
+			if (assignInsn.getType() == InsnType.CHECK_CAST && assignInsn instanceof IndexInsnNode) {
+				ArgType t = ((IndexInsnNode) assignInsn).getIndexAsType();
+				if (t.isTypeKnown()) {
+					castType = t;
+				}
+			} else if (assignInsn.getType() == InsnType.CONSTRUCTOR) {
+				constructorType = ((ConstructorInsn) assignInsn).getClassType().getType();
+			}
+		}
+		if (castType != null) {
+			return castType;
+		}
+		if (constructorType != null) {
+			return constructorType;
+		}
 		for (SSAVar ssaVar : codeVar.getSsaVars()) {
 			ArgType ssaType = ssaVar.getImmutableType();
 			if (ssaType != null && ssaType.isTypeKnown()) {
@@ -360,7 +388,7 @@ public class ProcessVariables extends AbstractVisitor {
 				}
 			}
 		}
-		return ArgType.object("java.util.Collection");
+		return ArgType.UNKNOWN;
 	}
 
 	private static void declareVarInRegion(IContainer region, CodeVar var) {
