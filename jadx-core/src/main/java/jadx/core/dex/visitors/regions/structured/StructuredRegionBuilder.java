@@ -21,6 +21,7 @@ import jadx.core.dex.regions.Region;
 import jadx.core.dex.regions.structured.CoroutineDispatchRegion;
 import jadx.core.dex.regions.structured.MultiEntryLoopRegion;
 import jadx.core.dex.visitors.blocks.reducible.GraphShapeClassifier;
+import jadx.core.dex.visitors.regions.maker.StructuredBlockRegionBuilder;
 
 public final class StructuredRegionBuilder {
 	private StructuredRegionBuilder() {
@@ -79,21 +80,34 @@ public final class StructuredRegionBuilder {
 				resumeEntryByLabel,
 				postLoopBlocks);
 
+		Set<BlockNode> preambleStops = new HashSet<>(componentBlocks);
+		preambleStops.addAll(postLoopBlocks);
+
+		Set<BlockNode> loopBodyStops = new HashSet<>(postLoopBlocks);
+		loopBodyStops.add(outerHeader);
+		loopBodyStops.add(innerHeader);
+		for (BlockNode block : mth.getBasicBlocks()) {
+			if (!componentBlocks.contains(block) && block.getStartOffset() != -1) {
+				loopBodyStops.add(block);
+			}
+		}
+
+		StructuredBlockRegionBuilder preambleBuilder = new StructuredBlockRegionBuilder(mth, preambleStops);
+		StructuredBlockRegionBuilder loopBodyBuilder = new StructuredBlockRegionBuilder(mth, loopBodyStops);
+		Region preambleRegion = preambleBuilder.buildFrom(null, mth.getEnterBlock());
+
 		Region root = new Region(null);
-		root.add(new CoroutineDispatchRegion(root, attr));
+		root.add(new CoroutineDispatchRegion(root, preambleRegion));
+		Region outerBodyRegion = loopBodyBuilder.buildFromBlocks(root, outerBodyBlocks);
+		Region innerBodyRegion = loopBodyBuilder.buildFromBlocks(root, innerBodyBlocks);
 		root.add(new MultiEntryLoopRegion(
 				root,
 				outerHeader,
 				innerHeader,
 				innerExitToOuter,
-				innerResumeEntry,
-				outerResumeEntry,
-				outerBodyBlocks,
-				innerBodyBlocks));
-		Region post = new Region(root);
-		for (BlockNode block : postLoopBlocks) {
-			post.add(block);
-		}
+				outerBodyRegion,
+				innerBodyRegion));
+		Region post = preambleBuilder.buildFromBlocks(root, postLoopBlocks);
 		root.add(post);
 		mth.addAttr(attr);
 		return root;

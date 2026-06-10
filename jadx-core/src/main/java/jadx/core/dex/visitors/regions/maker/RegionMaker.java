@@ -35,6 +35,7 @@ public class RegionMaker {
 	private final int regionsLimit;
 
 	private int regionsCount;
+	private boolean skipLoops;
 
 	public RegionMaker(MethodNode mth) {
 		this.mth = mth;
@@ -43,6 +44,11 @@ public class RegionMaker {
 		this.loopMaker = new LoopRegionMaker(mth, this, ifMaker);
 		this.processedBlocks = BlockSet.empty(mth);
 		this.regionsLimit = mth.getBasicBlocks().size() * 400;
+	}
+
+	public RegionMaker setSkipLoops(boolean skipLoops) {
+		this.skipLoops = skipLoops;
+		return this;
 	}
 
 	public Region makeMthRegion() {
@@ -82,12 +88,15 @@ public class RegionMaker {
 		if (block.contains(AFlag.MTH_EXIT_BLOCK)) {
 			return null;
 		}
+		if (stack.containsExit(block)) {
+			return null;
+		}
 		BlockNode next = null;
 		boolean processed = false;
 
 		List<LoopInfo> loops = block.getAll(AType.LOOP);
 		int loopCount = loops.size();
-		if (loopCount != 0 && block.contains(AFlag.LOOP_START)) {
+		if (!skipLoops && loopCount != 0 && block.contains(AFlag.LOOP_START)) {
 			if (loopCount == 1) {
 				next = loopMaker.process(r, loops.get(0), stack);
 				processed = true;
