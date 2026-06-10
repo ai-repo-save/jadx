@@ -39,6 +39,9 @@ import static org.assertj.core.api.Assertions.assertThat;
  * One branch also calls {@code Helper.useString(String)} with the same register, so
  * {@link TypeInferenceVisitor#initTypeBounds} yields incompatible USE bounds on the PHI result
  * without any test-side bound injection.
+ * <p>
+ * Bug C fix: {@link TypeUpdate#moveListener} must not turn bound {@code REJECT} into {@code CHANGED}
+ * (false progress); it returns {@code SAME} so the apply converges and param typing still succeeds.
  */
 public class TestTypeUpdateMoveRejectLaundering extends SmaliTest {
 
@@ -66,19 +69,32 @@ public class TestTypeUpdateMoveRejectLaundering extends SmaliTest {
 	}
 
 	@Test
-	public void moveListenerLaundersInBoundsRejectToChanged() {
+	public void immutableApplyConvergesWithinUpdateBudget() {
+		disableCompilation();
+		args.setTypeUpdatesLimitCount(1);
+		MethodContext ctx = loadContextBeforeTypeInference();
+		initTypeBounds(ctx.root, ctx.mth);
+
+		TypeUpdateResult result = ctx.root.getTypeUpdate()
+				.applyWithWiderIgnSame(ctx.mth, ctx.paramVar, ctx.paramType);
+
+		assertThat(result).isEqualTo(TypeUpdateResult.CHANGED);
+	}
+
+	@Test
+	public void conflictingPhiBoundsDoNotLaunderRejectToChanged() {
 		disableCompilation();
 		MethodContext ctx = loadContextBeforeTypeInference();
 		initTypeBounds(ctx.root, ctx.mth);
 		assertThat(ctx.phiVar.getTypeInfo().getType().isTypeKnown()).isFalse();
 
-		TypeUpdate typeUpdate = ctx.root.getTypeUpdate();
-		TypeUpdateResult result = typeUpdate.applyWithWiderIgnSame(ctx.mth, ctx.paramVar, ctx.paramType);
+		TypeUpdateResult result = ctx.root.getTypeUpdate()
+				.applyWithWiderIgnSame(ctx.mth, ctx.paramVar, ctx.paramType);
 
 		assertThat(result).isEqualTo(TypeUpdateResult.CHANGED);
 		assertThat(ctx.paramVar.getTypeInfo().getType().getObject())
 				.isEqualTo("typeinference.TestTypeUpdateMoveRejectLaundering.Param");
-		// PHI/move chain never committed: upstream saw CHANGED instead of REJECT.
+		// MOVE/PHI edge failed bounds but must not fake CHANGED on that edge; dest stays unknown.
 		assertThat(ctx.phiVar.getTypeInfo().getType().isTypeKnown()).isFalse();
 	}
 
