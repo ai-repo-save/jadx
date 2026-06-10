@@ -26,8 +26,8 @@ import jadx.api.plugins.input.data.annotations.EncodedType;
 import jadx.api.plugins.input.data.annotations.EncodedValue;
 import jadx.api.plugins.input.data.attributes.JadxAttrType;
 import jadx.core.Consts;
-import jadx.core.codegen.kotlin.KotlinCodegen;
-import jadx.core.codegen.kotlin.KotlinTypeGen;
+import jadx.core.codegen.lang.CodeLanguage;
+import jadx.core.codegen.lang.CodeLanguages;
 import jadx.core.codegen.utils.CodeGenUtils;
 import jadx.core.dex.attributes.AFlag;
 import jadx.core.dex.attributes.AType;
@@ -42,7 +42,6 @@ import jadx.core.dex.info.AccessInfo;
 import jadx.core.dex.info.ClassInfo;
 import jadx.core.dex.instructions.args.ArgType;
 import jadx.core.dex.instructions.args.LiteralArg;
-import jadx.core.dex.instructions.args.PrimitiveType;
 import jadx.core.dex.instructions.mods.ConstructorInsn;
 import jadx.core.dex.nodes.ClassNode;
 import jadx.core.dex.nodes.FieldNode;
@@ -59,6 +58,7 @@ public class ClassGen {
 
 	private final ClassNode cls;
 	private final ClassGen parentGen;
+	private final CodeLanguage lang;
 	private final AnnotationGen annotationGen;
 	private final boolean fallback;
 	private final boolean useImports;
@@ -76,18 +76,25 @@ public class ClassGen {
 	private NameGen outerNameGen;
 
 	public ClassGen(ClassNode cls, JadxArgs jadxArgs) {
-		this(cls, null, jadxArgs.isUseImports(), jadxArgs.isFallbackMode(), jadxArgs.isShowInconsistentCode(), jadxArgs.getIntegerFormat());
+		this(cls, null, CodeLanguages.from(jadxArgs), jadxArgs.isUseImports(), jadxArgs.isFallbackMode(),
+				jadxArgs.isShowInconsistentCode(), jadxArgs.getIntegerFormat());
 	}
 
 	public ClassGen(ClassNode cls, ClassGen parentClsGen) {
-		this(cls, parentClsGen, parentClsGen.useImports, parentClsGen.fallback, parentClsGen.showInconsistentCode,
-				parentClsGen.integerFormat);
+		this(cls, parentClsGen, parentClsGen.lang, parentClsGen.useImports, parentClsGen.fallback,
+				parentClsGen.showInconsistentCode, parentClsGen.integerFormat);
 	}
 
 	public ClassGen(ClassNode cls, ClassGen parentClsGen, boolean useImports, boolean fallback, boolean showBadCode,
 			IntegerFormat integerFormat) {
+		this(cls, parentClsGen, CodeLanguages.from(cls.root()), useImports, fallback, showBadCode, integerFormat);
+	}
+
+	private ClassGen(ClassNode cls, ClassGen parentClsGen, CodeLanguage lang, boolean useImports, boolean fallback,
+			boolean showBadCode, IntegerFormat integerFormat) {
 		this.cls = cls;
 		this.parentGen = parentClsGen;
+		this.lang = lang;
 		this.fallback = fallback;
 		this.useImports = useImports;
 		this.showInconsistentCode = showBadCode;
@@ -100,8 +107,12 @@ public class ClassGen {
 		return cls;
 	}
 
+	public CodeLanguage getLang() {
+		return lang;
+	}
+
 	public boolean isKotlinOutput() {
-		return KotlinCodegen.isKotlinOutput(cls.root());
+		return lang.isKotlin();
 	}
 
 	public boolean isKotlinCompanionGen() {
@@ -190,6 +201,7 @@ public class ClassGen {
 		CodeGenUtils.addInputFileInfo(clsCode, cls);
 
 		annotationGen.addForClass(clsCode);
+		af = lang.filterClassAccess(af);
 		clsCode.startLineWithNum(cls.getSourceLine()).add(af.makeString(cls.checkCommentsLevel(CommentsLevel.INFO)));
 		if (af.isInterface()) {
 			if (af.isAnnotation()) {
@@ -197,7 +209,7 @@ public class ClassGen {
 			}
 			clsCode.add("interface ");
 		} else if (af.isEnum()) {
-			clsCode.add(isKotlinOutput() ? "enum class " : "enum ");
+			clsCode.add(lang.enumClassKeyword());
 		} else {
 			clsCode.add("class ");
 		}
@@ -207,67 +219,7 @@ public class ClassGen {
 		addGenericTypeParameters(clsCode, cls.getGenericTypeParameters(), true);
 		clsCode.add(' ');
 
-		ArgType sup = cls.getSuperClass();
-		if (isKotlinOutput()) {
-			addKotlinSupertypes(clsCode, af, sup);
-		} else {
-			addJavaSupertypes(clsCode, af, sup);
-		}
-	}
-
-	private void addJavaSupertypes(ICodeWriter clsCode, AccessInfo af, ArgType sup) {
-		if (sup != null
-				&& !sup.equals(ArgType.OBJECT)
-				&& !cls.contains(AFlag.REMOVE_SUPER_CLASS)) {
-			clsCode.add("extends ");
-			useClass(clsCode, sup);
-			clsCode.add(' ');
-		}
-
-		if (!cls.getInterfaces().isEmpty() && !af.isAnnotation()) {
-			if (cls.getAccessFlags().isInterface()) {
-				clsCode.add("extends ");
-			} else {
-				clsCode.add("implements ");
-			}
-			for (Iterator<ArgType> it = cls.getInterfaces().iterator(); it.hasNext();) {
-				ArgType interf = it.next();
-				useClass(clsCode, interf);
-				if (it.hasNext()) {
-					clsCode.add(", ");
-				}
-			}
-			if (!cls.getInterfaces().isEmpty()) {
-				clsCode.add(' ');
-			}
-		}
-	}
-
-	private void addKotlinSupertypes(ICodeWriter clsCode, AccessInfo af, ArgType sup) {
-		boolean first = true;
-		if (sup != null
-				&& !sup.equals(ArgType.OBJECT)
-				&& !cls.contains(AFlag.REMOVE_SUPER_CLASS)
-				&& !af.isInterface()
-				&& !af.isEnum()) {
-			clsCode.add(": ");
-			useClass(clsCode, sup);
-			first = false;
-		}
-		if (!cls.getInterfaces().isEmpty() && !af.isAnnotation()) {
-			for (ArgType interf : cls.getInterfaces()) {
-				if (first) {
-					clsCode.add(": ");
-					first = false;
-				} else {
-					clsCode.add(", ");
-				}
-				useClass(clsCode, interf);
-			}
-			if (!first) {
-				clsCode.add(' ');
-			}
-		}
+		lang.addSupertypes(this, clsCode, af, cls.getSuperClass(), cls);
 	}
 
 	public boolean addGenericTypeParameters(ICodeWriter code, List<ArgType> generics, boolean classDeclaration) {
@@ -287,7 +239,7 @@ public class ClassGen {
 			}
 			List<ArgType> list = genericInfo.getExtendTypes();
 			if (list != null && !list.isEmpty()) {
-				code.add(isKotlinOutput() ? " : " : " extends ");
+				code.add(lang.genericExtendsKeyword());
 				for (Iterator<ArgType> it = list.iterator(); it.hasNext();) {
 					ArgType g = it.next();
 					if (g.isGenericType()) {
@@ -320,7 +272,7 @@ public class ClassGen {
 	 *                       classes)
 	 */
 	public void addClassBody(ICodeWriter clsCode, boolean printClassName) throws CodegenException {
-		if (isKotlinOutput()) {
+		if (lang.usesKotlinClassBody()) {
 			addKotlinClassBody(clsCode, printClassName);
 			return;
 		}
@@ -523,7 +475,7 @@ public class ClassGen {
 		if (mth.isNoCode()) {
 			MethodGen mthGen = new MethodGen(this, mth);
 			mthGen.addDefinition(code);
-			if (!isKotlinOutput()) {
+			if (lang.methodNeedsSemicolon()) {
 				code.add(';');
 			}
 		} else {
@@ -575,23 +527,9 @@ public class ClassGen {
 		}
 		annotationGen.addForField(code, f);
 
-		AccessInfo fieldAccess = f.getAccessFlags();
-		if (isKotlinOutput() && kotlinCompanionGen) {
-			fieldAccess = fieldAccess.remove(AccessFlags.STATIC);
-		}
+		AccessInfo fieldAccess = lang.filterFieldAccess(f.getAccessFlags(), kotlinCompanionGen);
 		code.startLine(fieldAccess.makeString(f.checkCommentsLevel(CommentsLevel.INFO)));
-		if (isKotlinOutput()) {
-			code.add("var ");
-			code.attachDefinition(f);
-			code.add(f.getAlias());
-			code.add(": ");
-			useType(code, f.getType());
-		} else {
-			useType(code, f.getType());
-			code.add(' ');
-			code.attachDefinition(f);
-			code.add(f.getAlias());
-		}
+		lang.emitFieldTypeAndName(this, code, f, f.getAccessFlags().isFinal());
 
 		FieldInitInsnAttr initInsnAttr = f.get(AType.FIELD_INIT_INSN);
 		if (initInsnAttr != null) {
@@ -615,7 +553,7 @@ public class ClassGen {
 				}
 			}
 		}
-		if (!isKotlinOutput()) {
+		if (lang.fieldNeedsSemicolon()) {
 			code.add(';');
 		}
 	}
@@ -700,25 +638,7 @@ public class ClassGen {
 	}
 
 	public void useType(ICodeWriter code, ArgType type) {
-		if (isKotlinOutput()) {
-			KotlinTypeGen.useType(this, code, type);
-			return;
-		}
-		PrimitiveType stype = type.getPrimitiveType();
-		if (stype == null) {
-			code.add(type.toString());
-		} else if (stype == PrimitiveType.OBJECT) {
-			if (type.isGenericType()) {
-				code.add(type.getObject());
-			} else {
-				useClass(code, type);
-			}
-		} else if (stype == PrimitiveType.ARRAY) {
-			useType(code, type.getArrayElement());
-			code.add("[]");
-		} else {
-			code.add(stype.getLongName());
-		}
+		lang.useType(this, code, type);
 	}
 
 	public void useClass(ICodeWriter code, String rawCls) {
