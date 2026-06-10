@@ -6,24 +6,21 @@ import java.util.Comparator;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 
 import org.jetbrains.annotations.Nullable;
 
-import jadx.core.dex.attributes.AFlag;
 import jadx.core.dex.attributes.AType;
 import jadx.core.dex.attributes.nodes.LoopInfo;
 import jadx.core.dex.attributes.nodes.LoopLabelAttr;
 import jadx.core.dex.attributes.nodes.StateMachineAttr;
 import jadx.core.dex.instructions.IfNode;
-import jadx.core.dex.instructions.InsnType;
 import jadx.core.dex.nodes.BlockNode;
 import jadx.core.dex.nodes.InsnNode;
 import jadx.core.dex.nodes.MethodNode;
 import jadx.core.dex.regions.Region;
 import jadx.core.dex.regions.structured.CoroutineDispatchRegion;
-import jadx.core.dex.regions.structured.MultiEntryLoopRegion;
+import jadx.core.dex.regions.structured.LabeledOuterLoopRegion;
 import jadx.core.dex.visitors.blocks.reducible.GraphShapeClassifier;
 import jadx.core.dex.visitors.regions.maker.StructuredBlockRegionBuilder;
 import jadx.core.utils.BlockUtils;
@@ -66,10 +63,6 @@ public final class StructuredRegionBuilder {
 
 		List<BlockNode> postLoopBlocks = collectPostLoopBlocks(mth, componentBlocks, outerHeader);
 		Set<BlockNode> postLoopSet = new HashSet<>(postLoopBlocks);
-		List<BlockNode> preambleBlocks = collectPreambleBlocks(mth, componentBlocks, postLoopSet);
-		Map<Integer, BlockNode> resumeEntryByLabel = stateMachine.getLabelToResumeBlock();
-		Integer innerResumeLabel = findLabelForHeader(resumeEntryByLabel, innerHeader);
-		Integer outerResumeLabel = findLabelForHeader(resumeEntryByLabel, outerHeader);
 
 		Set<BlockNode> preambleStops = new HashSet<>(componentBlocks);
 		preambleStops.addAll(postLoopBlocks);
@@ -92,7 +85,7 @@ public final class StructuredRegionBuilder {
 		Region root = new Region(null);
 		root.add(new CoroutineDispatchRegion(root, preambleRegion));
 		Region loopBodyRegion = loopBodyBuilder.buildFrom(root, BlockUtils.getLoopBodyEntry(outerHeader));
-		root.add(new MultiEntryLoopRegion(
+		root.add(new LabeledOuterLoopRegion(
 				root,
 				outerLoop,
 				outerHeader,
@@ -151,34 +144,6 @@ public final class StructuredRegionBuilder {
 			}
 		}
 		return null;
-	}
-
-	private static @Nullable Integer findLabelForHeader(Map<Integer, BlockNode> resumeEntryByLabel, BlockNode header) {
-		for (Map.Entry<Integer, BlockNode> entry : resumeEntryByLabel.entrySet()) {
-			BlockNode target = BlockUtils.followEmptyPath(entry.getValue());
-			if (target == header || BlockUtils.resolvesToHeader(header, target)) {
-				return entry.getKey();
-			}
-		}
-		return null;
-	}
-
-	private static List<BlockNode> collectPreambleBlocks(
-			MethodNode mth,
-			Set<BlockNode> componentBlocks,
-			Set<BlockNode> postLoopBlocks) {
-		List<BlockNode> preamble = new ArrayList<>();
-		for (BlockNode block : mth.getBasicBlocks()) {
-			if (componentBlocks.contains(block) || postLoopBlocks.contains(block)) {
-				continue;
-			}
-			if (block.getStartOffset() == -1) {
-				continue;
-			}
-			preamble.add(block);
-		}
-		preamble.sort(Comparator.comparingInt(BlockNode::getStartOffset));
-		return preamble;
 	}
 
 	private static List<BlockNode> collectPostLoopBlocks(

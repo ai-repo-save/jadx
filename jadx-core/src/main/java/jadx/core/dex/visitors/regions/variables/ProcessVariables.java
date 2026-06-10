@@ -28,7 +28,7 @@ import jadx.core.dex.nodes.IRegion;
 import jadx.core.dex.nodes.InsnNode;
 import jadx.core.dex.nodes.MethodNode;
 import jadx.core.dex.regions.loops.LoopRegion;
-import jadx.core.dex.regions.structured.MultiEntryLoopRegion;
+import jadx.core.dex.regions.structured.LabeledOuterLoopRegion;
 import jadx.core.dex.visitors.AbstractVisitor;
 import jadx.core.dex.visitors.regions.AbstractRegionVisitor;
 import jadx.core.dex.visitors.regions.DepthRegionTraversal;
@@ -279,7 +279,7 @@ public class ProcessVariables extends AbstractVisitor {
 	private static boolean canDeclareAt(VarUsage usage, UsePlace usePlace) {
 		IRegion region = usePlace.getRegion();
 		// workaround for declare variables used in several loops
-		if (region instanceof LoopRegion || region instanceof MultiEntryLoopRegion) {
+		if (region instanceof LoopRegion || region instanceof LabeledOuterLoopRegion) {
 			for (UsePlace use : usage.getAssigns()) {
 				if (!RegionUtils.isRegionContainsRegion(region, use.getRegion())) {
 					return false;
