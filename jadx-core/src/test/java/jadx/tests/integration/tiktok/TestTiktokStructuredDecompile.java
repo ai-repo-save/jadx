@@ -11,12 +11,15 @@ import org.junit.jupiter.api.Test;
 
 import jadx.api.JadxInternalAccess;
 import jadx.core.dex.attributes.AType;
+import jadx.core.dex.attributes.nodes.StructuredCoroutineAttr;
 import jadx.core.dex.nodes.ClassNode;
 import jadx.core.dex.nodes.MethodNode;
 import jadx.core.dex.nodes.RootNode;
 import jadx.core.dex.regions.structured.MultiEntryLoopRegion;
 import jadx.core.utils.RegionUtils;
 import jadx.tests.api.SmaliTest;
+import jadx.tests.api.compiler.CompilerOptions;
+import jadx.tests.api.compiler.TestCompiler;
 
 import static jadx.tests.api.utils.assertj.JadxAssertions.assertThat;
 
@@ -28,6 +31,8 @@ public class TestTiktokStructuredDecompile extends SmaliTest {
 		enableDeobfuscation();
 		MethodNode mth = loadProcessedTargetMethod();
 		assertThat(mth.contains(AType.STRUCTURED_COROUTINE)).isTrue();
+		StructuredCoroutineAttr attr = mth.get(AType.STRUCTURED_COROUTINE);
+		assertThat(attr.getPostLoopBlocks()).isNotEmpty();
 		assertThat(mth.getRegion()).isNotNull();
 		AtomicReference<MultiEntryLoopRegion> loopRegion = new AtomicReference<>();
 		RegionUtils.visitRegions(mth, mth.getRegion(), region -> {
@@ -38,17 +43,61 @@ public class TestTiktokStructuredDecompile extends SmaliTest {
 			return true;
 		});
 		assertThat(loopRegion.get()).isNotNull();
-		int outerBodySize = loopRegion.get().getOuterBodyRegion().getSubBlocks().size();
-		int innerBodySize = loopRegion.get().getInnerBodyRegion().getSubBlocks().size();
-		assertThat(outerBodySize + innerBodySize)
-				.as("structured loop body regions (outer=%d inner=%d)", outerBodySize, innerBodySize)
+		assertThat(loopRegion.get().getOuterBodyRegion().getSubBlocks().size())
+				.as("structured loop body region")
 				.isGreaterThan(0);
 	}
 
 	@Test
-	public void testLizDecompilesWithoutRegionOverflow() {
+	public void testLizPostLoopRegionIsEmitted() {
 		allowWarnInCode();
 		enableDeobfuscation();
+		ClassNode cls = loadAndGenerateLizClass();
+		String code = cls.getCode().getCodeStr();
+		assertThat(code)
+				.contains("finish sorting")
+				.matches("(?s).*return\\s+\\w+\\s*;.*");
+	}
+
+	@Test
+	public void testLizDecompilesWithoutRegionOverflow() {
+		String code = decompileLizClass();
+		assertThat(code)
+				.doesNotContain("JadxOverflowException")
+				.doesNotContain("Regions count limit reached")
+				.doesNotContain("UnsupportedOperationException(\"Method not decompiled")
+				.doesNotContain("Method dump skipped")
+				.doesNotContain("??")
+				.contains("outer:")
+				.contains("continue outer")
+				.contains("while (")
+				.doesNotContain("while (!it.hasNext())")
+				.contains("return ");
+	}
+
+	@Test
+	public void testLizDecompilesToCompilableJava() throws Exception {
+		allowWarnInCode();
+		enableDeobfuscation();
+		jadxDecompiler = loadFiles(collectFixtureSmaliFiles());
+		RootNode root = JadxInternalAccess.getRoot(jadxDecompiler);
+		List<ClassNode> classes = root.getClasses(false);
+		classes.forEach(cls -> cls.add(jadx.core.dex.attributes.AFlag.DONT_UNLOAD_CLASS));
+		classes.forEach(cls -> {
+			root.getProcessClasses().forceProcess(cls);
+			cls.decompile();
+		});
+		CompilerOptions opts = new CompilerOptions();
+		TestCompiler compiler = new TestCompiler(opts);
+		compiler.compileNodes(classes);
+	}
+
+	private String decompileLizClass() {
+		ClassNode cls = loadAndGenerateLizClass();
+		return cls.getCode().getCodeStr();
+	}
+
+	private ClassNode loadAndGenerateLizClass() {
 		jadxDecompiler = loadFiles(collectFixtureSmaliFiles());
 		RootNode root = JadxInternalAccess.getRoot(jadxDecompiler);
 		ClassNode cls = root.getClasses(false).stream()
@@ -56,16 +105,9 @@ public class TestTiktokStructuredDecompile extends SmaliTest {
 				.findFirst()
 				.orElseThrow();
 		cls.add(jadx.core.dex.attributes.AFlag.DONT_UNLOAD_CLASS);
-		root.getProcessClasses().generateCode(cls);
-
-		String code = cls.getCode().getCodeStr();
-		assertThat(code)
-				.doesNotContain("JadxOverflowException")
-				.doesNotContain("Regions count limit reached")
-				.doesNotContain("UnsupportedOperationException(\"Method not decompiled")
-				.doesNotContain("Method dump skipped")
-				.contains("outer:")
-				.contains("continue outer");
+		root.getProcessClasses().forceProcess(cls);
+		cls.decompile();
+		return cls;
 	}
 
 	private MethodNode loadProcessedTargetMethod() {

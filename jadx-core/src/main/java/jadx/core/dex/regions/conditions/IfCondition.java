@@ -13,6 +13,7 @@ import org.jetbrains.annotations.Nullable;
 import jadx.core.dex.attributes.AttrNode;
 import jadx.core.dex.instructions.ArithNode;
 import jadx.core.dex.instructions.ArithOp;
+import jadx.core.dex.attributes.nodes.LoopInfo;
 import jadx.core.dex.instructions.IfNode;
 import jadx.core.dex.instructions.IfOp;
 import jadx.core.dex.instructions.args.ArgType;
@@ -71,6 +72,19 @@ public final class IfCondition extends AttrNode {
 
 	public static IfCondition fromIfNode(IfNode insn) {
 		return new IfCondition(new Compare(insn));
+	}
+
+	public static @Nullable IfCondition buildLoopWhileCondition(LoopInfo loop, BlockNode header) {
+		InsnNode lastInsn = BlockUtils.getLastInsn(header);
+		if (!(lastInsn instanceof IfNode)) {
+			return null;
+		}
+		IfNode ifInsn = (IfNode) lastInsn;
+		IfCondition condition = fromIfNode(ifInsn);
+		if (!loop.getLoopBlocks().contains(ifInsn.getThenBlock())) {
+			condition = invert(condition);
+		}
+		return condition;
 	}
 
 	public static IfCondition ternary(IfCondition a, IfCondition b, IfCondition c) {
