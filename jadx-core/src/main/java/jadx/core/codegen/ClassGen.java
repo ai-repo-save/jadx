@@ -26,6 +26,7 @@ import jadx.api.plugins.input.data.annotations.EncodedType;
 import jadx.api.plugins.input.data.annotations.EncodedValue;
 import jadx.api.plugins.input.data.attributes.JadxAttrType;
 import jadx.core.Consts;
+import jadx.core.codegen.kotlin.KotlinTypeGen;
 import jadx.core.codegen.lang.CodeLanguage;
 import jadx.core.codegen.lang.CodeLanguages;
 import jadx.core.codegen.utils.CodeGenUtils;
@@ -320,9 +321,11 @@ public class ClassGen {
 	}
 
 	private void addKotlinInstanceMembers(ICodeWriter clsCode) {
+		ClassNode companionCls = findKotlinCompanionClass();
 		Stream.of(cls.getInnerClasses(), cls.getMethods())
 				.flatMap(Collection::stream)
 				.filter(node -> !skipNode(node))
+				.filter(node -> !(node instanceof ClassNode) || node != companionCls)
 				.filter(node -> !(node instanceof MethodNode) || isKotlinInstanceMethod((MethodNode) node))
 				.sorted(Comparator.comparingInt(LineAttrNode::getSourceLine))
 				.forEach(node -> {
@@ -345,11 +348,13 @@ public class ClassGen {
 		if (isKotlinOutput() && cls.getAccessFlags().isObject()) {
 			return;
 		}
-		boolean hasStaticFields = cls.getFields().stream()
-				.anyMatch(f -> !skipNode(f) && f.getAccessFlags().isStatic());
-		boolean hasStaticMethods = cls.getMethods().stream()
-				.anyMatch(m -> !skipNode(m) && (m.getMethodInfo().isClassInit() || m.getAccessFlags().isStatic()));
-		if (!hasStaticFields && !hasStaticMethods) {
+		ClassNode companionCls = findKotlinCompanionClass();
+		boolean hasOuterStaticFields = cls.getFields().stream()
+				.anyMatch(f -> !skipNode(f) && f.getAccessFlags().isStatic() && !isCompanionRefField(f, companionCls));
+		boolean hasOuterStaticMethods = cls.getMethods().stream()
+				.anyMatch(m -> !skipNode(m) && isKotlinCompanionStaticMethod(m));
+		boolean hasCompanionMembers = companionCls != null && hasKotlinCompanionInnerMembers(companionCls);
+		if (!hasOuterStaticFields && !hasOuterStaticMethods && !hasCompanionMembers) {
 			return;
 		}
 		if (clsCode.getLength() != clsDeclOffset) {
@@ -359,18 +364,87 @@ public class ClassGen {
 		clsCode.incIndent();
 		kotlinCompanionGen = true;
 		for (FieldNode f : cls.getFields()) {
-			if (f.getAccessFlags().isStatic()) {
+			if (f.getAccessFlags().isStatic() && !isCompanionRefField(f, companionCls) && !skipNode(f)) {
 				addField(clsCode, f);
 			}
 		}
-		cls.getMethods().stream()
+		if (companionCls != null) {
+			for (FieldNode f : companionCls.getFields()) {
+				if (!f.getAccessFlags().isStatic() && !skipNode(f)) {
+					addField(clsCode, f);
+				}
+			}
+		}
+		Stream<MethodNode> outerStaticMethods = cls.getMethods().stream()
 				.filter(m -> !skipNode(m))
-				.filter(m -> m.getMethodInfo().isClassInit() || m.getAccessFlags().isStatic())
+				.filter(this::isKotlinCompanionStaticMethod);
+		Stream<MethodNode> companionMethods = companionCls == null ? Stream.empty()
+				: companionCls.getMethods().stream()
+						.filter(m -> !skipNode(m))
+						.filter(m -> !m.isConstructor());
+		Stream.concat(outerStaticMethods, companionMethods)
 				.sorted(Comparator.comparingInt(LineAttrNode::getSourceLine))
 				.forEach(m -> addMethod(clsCode, m));
 		kotlinCompanionGen = false;
 		clsCode.decIndent();
 		clsCode.startLine("}");
+	}
+
+	@Nullable
+	private ClassNode findKotlinCompanionClass() {
+		if (!isKotlinOutput()) {
+			return null;
+		}
+		for (ClassNode innerCls : cls.getInnerClasses()) {
+			if (KotlinTypeGen.isKotlinCompanionClass(innerCls)) {
+				return innerCls;
+			}
+			if ("Companion".equals(innerCls.getClassInfo().getShortName()) && isCompanionRefFieldExists(innerCls)) {
+				return innerCls;
+			}
+		}
+		return null;
+	}
+
+	private boolean isCompanionRefFieldExists(ClassNode companionCls) {
+		String companionType = companionCls.getClassInfo().makeRawFullName();
+		for (FieldNode field : cls.getFields()) {
+			if (field.getAccessFlags().isStatic()
+					&& field.getType().isObject()
+					&& companionType.equals(field.getType().getObject())) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	private boolean isCompanionRefField(FieldNode field, @Nullable ClassNode companionCls) {
+		if (companionCls == null || !field.getAccessFlags().isStatic()) {
+			return false;
+		}
+		return field.getType().isObject()
+				&& companionCls.getClassInfo().makeRawFullName().equals(field.getType().getObject());
+	}
+
+	private boolean hasKotlinCompanionInnerMembers(ClassNode companionCls) {
+		for (FieldNode field : companionCls.getFields()) {
+			if (!skipNode(field) && !field.getAccessFlags().isStatic()) {
+				return true;
+			}
+		}
+		for (MethodNode mth : companionCls.getMethods()) {
+			if (!skipNode(mth) && !mth.isConstructor()) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	private boolean isKotlinCompanionStaticMethod(MethodNode mth) {
+		if (mth.getMethodInfo().isClassInit() || !mth.getAccessFlags().isStatic()) {
+			return false;
+		}
+		return !mth.getAccessFlags().isSynthetic() || !mth.getName().startsWith("access$");
 	}
 
 	private void addInnerClsAndMethods(ICodeWriter clsCode) {

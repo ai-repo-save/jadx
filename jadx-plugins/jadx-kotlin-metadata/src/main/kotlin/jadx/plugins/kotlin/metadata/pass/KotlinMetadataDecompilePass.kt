@@ -75,22 +75,30 @@ class KotlinMetadataDecompilePass(
 	}
 
 	private fun renameCompanion(wrapper: KmClassWrapper) {
-		val companion = wrapper.getCompanion()
-		companion?.run {
-			if (AFlag.DONT_RENAME !in field) {
-				RenameReasonAttr.forNode(field).append(METADATA_REASON)
-				field.rename(COMPANION_FIELD)
+		val companion = wrapper.getCompanion() ?: return
+		if (wrapper.cls.root().args.isKotlinOutput) {
+			companion.field.add(AFlag.DONT_GENERATE)
+			companion.cls.add(AFlag.DONT_GENERATE)
+			companion.cls.add(AFlag.DONT_INLINE)
+			companion.cls.methods.forEach { mth ->
+				if (mth.isConstructor) {
+					mth.add(AFlag.DONT_GENERATE)
+				}
 			}
-			if (AFlag.DONT_RENAME !in cls) {
-				RenameReasonAttr.forNode(cls).append(METADATA_REASON)
-				cls.rename(COMPANION_CLASS)
-			}
-
-			if (hide) {
-				field.add(AFlag.DONT_GENERATE)
-				cls.add(AFlag.DONT_GENERATE)
-				cls.add(AFlag.DONT_INLINE)
-			}
+			return
+		}
+		if (AFlag.DONT_RENAME !in companion.field) {
+			RenameReasonAttr.forNode(companion.field).append(METADATA_REASON)
+			companion.field.rename(COMPANION_FIELD)
+		}
+		if (AFlag.DONT_RENAME !in companion.cls) {
+			RenameReasonAttr.forNode(companion.cls).append(METADATA_REASON)
+			companion.cls.rename(COMPANION_CLASS)
+		}
+		if (companion.hide) {
+			companion.field.add(AFlag.DONT_GENERATE)
+			companion.cls.add(AFlag.DONT_GENERATE)
+			companion.cls.add(AFlag.DONT_INLINE)
 		}
 	}
 

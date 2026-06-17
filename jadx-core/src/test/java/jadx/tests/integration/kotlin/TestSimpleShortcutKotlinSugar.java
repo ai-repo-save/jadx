@@ -133,7 +133,7 @@ public class TestSimpleShortcutKotlinSugar extends SmaliKotlinTest {
 	public void companionObjectMigrationObject() {
 		assertThat(load("data.ShortcutDatabase"))
 				.code()
-				.containsPattern("object : \\w+.*Migration");
+				.containsPattern("object : Migration");
 	}
 
 	private ClassNode load(String relativeCls) {

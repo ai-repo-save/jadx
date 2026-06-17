@@ -106,7 +106,7 @@
 
     const/4 p1, 0x2
 
-    new-array p1, p1, [Lg1/a;
+    new-array p1, p1, [Landroidx/room/migration/Migration;
 
     invoke-static {}, Lcom/josski/simpleshortcut/data/ShortcutDatabase;->access$getMIGRATION_1_2$cp()Lcom/josski/simpleshortcut/data/ShortcutDatabase$Companion$MIGRATION_1_2$1;
 
@@ -122,7 +122,7 @@
 
     aput-object v2, p1, v1
 
-    invoke-virtual {v0, p1}, Landroidx/room/c0;->a([Lg1/a;)V
+    invoke-virtual {v0, p1}, Landroidx/room/c0;->a([Landroidx/room/migration/Migration;)V
 
     iput-boolean v3, v0, Landroidx/room/c0;->j:Z
 
