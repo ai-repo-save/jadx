@@ -9,6 +9,7 @@ import jadx.core.codegen.api.IClassGen;
 import jadx.core.codegen.api.IMethodGen;
 import jadx.core.codegen.kotlin.KotlinTypeGen;
 import jadx.core.dex.attributes.AType;
+import jadx.core.dex.attributes.FieldInitInsnAttr;
 import jadx.core.dex.attributes.nodes.MethodOverrideAttr;
 import jadx.core.dex.info.AccessInfo;
 import jadx.core.dex.instructions.FilledNewArrayNode;
@@ -18,11 +19,11 @@ import jadx.core.dex.instructions.args.CodeVar;
 import jadx.core.dex.instructions.args.InsnArg;
 import jadx.core.dex.instructions.args.PrimitiveType;
 import jadx.core.dex.nodes.ClassNode;
-import jadx.core.dex.attributes.AType;
 import jadx.core.dex.attributes.nodes.KotlinFieldFlagsAttr;
 import jadx.core.dex.nodes.FieldNode;
 import jadx.core.dex.nodes.InsnNode;
 import jadx.core.dex.nodes.MethodNode;
+import jadx.core.dex.visitors.kotlin.KotlinLazyUtils;
 import jadx.core.utils.Utils;
 import jadx.core.utils.exceptions.CodegenException;
 
@@ -152,6 +153,23 @@ class KotlinCodeLanguage implements CodeLanguage {
 		code.add(field.getAlias());
 		code.add(": ");
 		useType(classGen, code, field.getType());
+	}
+
+	@Override
+	public boolean emitFieldInitializer(IClassGen classGen, ICodeWriter code, FieldNode field,
+			FieldInitInsnAttr initInsnAttr, InsnGen insnGen) throws CodegenException {
+		KotlinFieldFlagsAttr flags = field.get(AType.KOTLIN_FIELD_FLAGS);
+		if (flags == null || !flags.isLazyDelegate() || initInsnAttr == null) {
+			return false;
+		}
+		InsnArg initArg = KotlinLazyUtils.extractDelegateInitializerArg(initInsnAttr.getInsn());
+		if (initArg == null) {
+			return false;
+		}
+		code.add(" { ");
+		insnGen.addArg(code, initArg, true);
+		code.add(" }");
+		return true;
 	}
 
 	@Override

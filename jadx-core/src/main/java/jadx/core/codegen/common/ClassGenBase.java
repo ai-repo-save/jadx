@@ -483,8 +483,14 @@ public abstract class ClassGenBase implements IClassGen {
 		FieldInitInsnAttr initInsnAttr = f.get(AType.FIELD_INIT_INSN);
 		if (initInsnAttr != null) {
 			InsnGen insnGen = makeInsnGen(initInsnAttr.getInsnMth());
-			code.add(" = ");
-			addInsnBody(insnGen, code, initInsnAttr.getInsn());
+			try {
+				if (!lang.emitFieldInitializer(this, code, f, initInsnAttr, insnGen)) {
+					code.add(" = ");
+					addInsnBody(insnGen, code, initInsnAttr.getInsn());
+				}
+			} catch (CodegenException e) {
+				cls.addError("Failed to generate field init code", e);
+			}
 		} else {
 			EncodedValue constVal = f.get(JadxAttrType.CONSTANT_VALUE);
 			if (constVal != null) {

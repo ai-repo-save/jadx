@@ -113,7 +113,8 @@ public class TestSimpleShortcutKotlinSugar extends SmaliKotlinTest {
 	public void lazyPropertyDelegate() {
 		assertThat(load("SimpleShortcutApp"))
 				.code()
-				.contains("by lazy");
+				.contains("by lazy {")
+				.doesNotContain("by lazy =");
 	}
 
 	@Test
