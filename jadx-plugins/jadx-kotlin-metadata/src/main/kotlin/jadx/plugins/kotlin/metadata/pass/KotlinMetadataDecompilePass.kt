@@ -6,7 +6,12 @@ import jadx.api.plugins.pass.impl.OrderedJadxPassInfo
 import jadx.api.plugins.pass.types.JadxDecompilePass
 import jadx.core.deobf.NameMapper
 import jadx.core.dex.attributes.AFlag
+import jadx.core.dex.attributes.AType
 import jadx.core.dex.attributes.nodes.RenameReasonAttr
+import jadx.core.dex.attributes.nodes.SuspendFunctionAttr
+import jadx.core.dex.attributes.nodes.SuspendFunctionAttr.Source
+import jadx.core.dex.attributes.nodes.SkipMethodArgsAttr
+import jadx.core.dex.instructions.args.ArgType
 import jadx.core.dex.nodes.ClassNode
 import jadx.core.dex.nodes.MethodNode
 import jadx.core.dex.nodes.RootNode
@@ -36,6 +41,7 @@ class KotlinMetadataDecompilePass(
 		if (options.isCompanion) renameCompanion(wrapper)
 		if (options.isDataClass) fixDataClass(wrapper)
 		if (options.isObjectClass) fixObjectClass(wrapper)
+		if (options.isSuspendFun) fixSuspendFunctions(wrapper)
 		if (options.isToString) renameToString(wrapper)
 		if (options.isGetters) renameGetters(wrapper)
 
@@ -99,6 +105,16 @@ class KotlinMetadataDecompilePass(
 					}
 				}
 			}
+		}
+	}
+
+	private fun fixSuspendFunctions(wrapper: KmClassWrapper) {
+		wrapper.getSuspendMethods().forEach { info ->
+			val mth = info.method
+			if (mth.get(AType.SUSPEND_FUNCTION) == null) {
+				mth.addAttr(SuspendFunctionAttr(info.continuationArgType, info.continuationArgIndex, Source.SIGNATURE))
+			}
+			SkipMethodArgsAttr.skipArg(mth, info.continuationArgIndex)
 		}
 	}
 

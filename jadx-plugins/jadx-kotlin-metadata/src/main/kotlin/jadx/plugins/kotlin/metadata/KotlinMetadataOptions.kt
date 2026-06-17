@@ -16,6 +16,8 @@ class KotlinMetadataOptions : BasePluginOptionsBuilder() {
 		private set
 	var isObjectClass: Boolean = true
 		private set
+	var isSuspendFun: Boolean = true
+		private set
 	var isToString: Boolean = true
 		private set
 	var isGetters: Boolean = true
@@ -52,6 +54,11 @@ class KotlinMetadataOptions : BasePluginOptionsBuilder() {
 			.defaultValue(true)
 			.setter { isObjectClass = it }
 
+		boolOption(SUSPEND_FUN_OPT)
+			.description("restore suspend fun modifier")
+			.defaultValue(true)
+			.setter { isSuspendFun = it }
+
 		boolOption(TO_STRING_OPT)
 			.description("rename fields using toString")
 			.defaultValue(true)
@@ -65,7 +72,8 @@ class KotlinMetadataOptions : BasePluginOptionsBuilder() {
 
 	fun isPreparePassNeeded(): Boolean = isClassAlias
 
-	fun isDecompilePassNeeded(): Boolean = isMethodArgs || isFields || isCompanion || isDataClass || isObjectClass || isToString || isGetters
+	fun isDecompilePassNeeded(): Boolean =
+		isMethodArgs || isFields || isCompanion || isDataClass || isObjectClass || isSuspendFun || isToString || isGetters
 
 	companion object {
 		const val CLASS_ALIAS_OPT = "$PLUGIN_ID.class-alias"
@@ -74,6 +82,7 @@ class KotlinMetadataOptions : BasePluginOptionsBuilder() {
 		const val COMPANION_OPT = "$PLUGIN_ID.companion"
 		const val DATA_CLASS_OPT = "$PLUGIN_ID.data-class"
 		const val OBJECT_CLASS_OPT = "$PLUGIN_ID.object-class"
+		const val SUSPEND_FUN_OPT = "$PLUGIN_ID.suspend-fun"
 		const val TO_STRING_OPT = "$PLUGIN_ID.to-string"
 		const val GETTERS_OPT = "$PLUGIN_ID.getters"
 	}

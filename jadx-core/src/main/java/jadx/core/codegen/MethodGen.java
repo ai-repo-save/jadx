@@ -29,6 +29,7 @@ import jadx.core.dex.attributes.nodes.JadxError;
 import jadx.core.dex.attributes.nodes.JumpInfo;
 import jadx.core.dex.attributes.nodes.MethodReplaceAttr;
 import jadx.core.dex.attributes.nodes.SkipMethodArgsAttr;
+import jadx.core.dex.attributes.nodes.SuspendFunctionAttr;
 import jadx.core.dex.info.AccessInfo;
 import jadx.core.dex.instructions.ConstStringNode;
 import jadx.core.dex.instructions.IfNode;
@@ -230,7 +231,10 @@ public class MethodGen {
 		code.add(')');
 		if (!ai.isConstructor()) {
 			ArgType retType = mth.getReturnType();
-			if (!KotlinTypeGen.isVoid(retType)) {
+			SuspendFunctionAttr suspendAttr = mth.get(AType.SUSPEND_FUNCTION);
+			if (suspendAttr != null && retType.isObject() && retType.equals(ArgType.OBJECT)) {
+				// JVM suspend bridge returns java.lang.Object
+			} else if (!KotlinTypeGen.isVoid(retType)) {
 				code.add(": ");
 				classGen.useType(code, retType);
 			}
