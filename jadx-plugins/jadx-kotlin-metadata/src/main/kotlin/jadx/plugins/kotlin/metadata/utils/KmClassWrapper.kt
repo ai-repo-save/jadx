@@ -13,6 +13,8 @@ class KmClassWrapper private constructor(
 	private val kmCls: KmClass,
 ) {
 
+	fun getConstructorArgs() = KotlinMetadataUtils.mapConstructorArgs(cls, kmCls)
+
 	fun getMethodArgs() = KotlinMetadataUtils.mapMethodArgs(cls, kmCls)
 
 	fun getFields() = KotlinMetadataUtils.mapFields(cls, kmCls)

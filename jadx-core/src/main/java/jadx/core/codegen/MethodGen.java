@@ -32,6 +32,8 @@ import jadx.core.dex.attributes.nodes.MethodDefaultParamsAttr;
 import jadx.core.dex.attributes.nodes.SkipMethodArgsAttr;
 import jadx.core.dex.attributes.nodes.SuspendFunctionAttr;
 import jadx.core.dex.info.AccessInfo;
+import jadx.core.dex.info.FieldInfo;
+import jadx.core.dex.instructions.IndexInsnNode;
 import jadx.core.dex.instructions.ConstStringNode;
 import jadx.core.dex.instructions.IfNode;
 import jadx.core.dex.instructions.InsnType;
@@ -257,6 +259,7 @@ public class MethodGen {
 		List<RegisterArg> args = mth.getArgRegs();
 		AnnotationMethodParamsAttr paramsAnnotation = mth.get(JadxAttrType.ANNOTATION_MTH_PARAMETERS);
 		int argNum = -1;
+		int paramIdx = -1;
 		int lastArgNum = args.size() - 1;
 		boolean first = true;
 		for (RegisterArg mthArg : args) {
@@ -264,6 +267,7 @@ public class MethodGen {
 			if (SkipMethodArgsAttr.isSkip(mth, argNum)) {
 				continue;
 			}
+			paramIdx++;
 			if (first) {
 				first = false;
 			} else {
@@ -306,18 +310,37 @@ public class MethodGen {
 			}
 			MethodDefaultParamsAttr defaultParams = mth.get(AType.METHOD_DEFAULT_PARAMS);
 			if (defaultParams != null) {
-				MethodDefaultParamsAttr.DefaultValue defaultValue = defaultParams.getDefault(argNum);
+				MethodDefaultParamsAttr.DefaultValue defaultValue = defaultParams.getDefault(paramIdx);
 				if (defaultValue != null) {
 					code.add(" = ");
 					try {
-						InsnGen insnGen = new InsnGen(new MethodGen(classGen, defaultValue.getSourceMth()), false);
-						insnGen.makeInsn(defaultValue.getValueInsn(), code);
+						if (!emitKotlinFieldReadDefault(code, defaultValue.getValueInsn())) {
+							InsnGen insnGen = new InsnGen(new MethodGen(classGen, defaultValue.getSourceMth()), false);
+							insnGen.makeInsn(defaultValue.getValueInsn(), code, InsnGen.Flags.INLINE);
+						}
 					} catch (CodegenException e) {
 						code.add("/* default */");
 					}
 				}
 			}
 		}
+	}
+
+	private boolean emitKotlinFieldReadDefault(ICodeWriter code, InsnNode valueInsn) {
+		if (valueInsn.getType() != InsnType.IGET) {
+			return false;
+		}
+		Object index = ((IndexInsnNode) valueInsn).getIndex();
+		if (!(index instanceof FieldInfo)) {
+			return false;
+		}
+		FieldInfo fieldInfo = (FieldInfo) index;
+		if (!fieldInfo.getDeclClass().equals(mth.getParentClass().getClassInfo())) {
+			return false;
+		}
+		code.add("this.");
+		code.add(fieldInfo.getAlias());
+		return true;
 	}
 
 	private MethodNode getMethodForDefinition() {

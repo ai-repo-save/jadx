@@ -35,19 +35,25 @@ import jadx.core.dex.attributes.AType;
 import jadx.core.dex.attributes.FieldInitInsnAttr;
 import jadx.core.dex.attributes.nodes.EnumClassAttr;
 import jadx.core.dex.attributes.nodes.EnumClassAttr.EnumField;
+import jadx.core.dex.attributes.nodes.KotlinDataClassAttr;
 import jadx.core.dex.attributes.nodes.KotlinFieldFlagsAttr;
+import jadx.core.dex.attributes.nodes.MethodDefaultParamsAttr;
 import jadx.core.dex.attributes.nodes.LineAttrNode;
 import jadx.core.dex.attributes.nodes.MethodInlineAttr;
 import jadx.core.dex.attributes.nodes.NotificationAttrNode;
 import jadx.core.dex.attributes.nodes.SkipMethodArgsAttr;
 import jadx.core.dex.info.AccessInfo;
 import jadx.core.dex.info.ClassInfo;
+import jadx.core.dex.info.FieldInfo;
+import jadx.core.dex.instructions.IndexInsnNode;
+import jadx.core.dex.instructions.InsnType;
 import jadx.core.dex.instructions.args.ArgType;
 import jadx.core.dex.instructions.args.LiteralArg;
 import jadx.core.dex.instructions.mods.ConstructorInsn;
 import jadx.core.dex.nodes.ClassNode;
 import jadx.core.dex.nodes.FieldNode;
 import jadx.core.dex.nodes.InsnNode;
+import jadx.core.dex.instructions.args.RegisterArg;
 import jadx.core.dex.nodes.MethodNode;
 import jadx.core.dex.nodes.RootNode;
 import jadx.core.utils.EncodedValueUtils;
@@ -225,6 +231,10 @@ public class ClassGen {
 		clsCode.attachDefinition(cls);
 		clsCode.add(cls.getClassInfo().getAliasShortName());
 
+		if (isDataClass && lang.isKotlin()) {
+			addKotlinDataClassPrimaryConstructor(clsCode);
+		}
+
 		addGenericTypeParameters(clsCode, cls.getGenericTypeParameters(), true);
 		clsCode.add(' ');
 
@@ -309,7 +319,7 @@ public class ClassGen {
 		clsCode.incIndent();
 		addEnumFields(clsCode);
 		for (FieldNode f : cls.getFields()) {
-			if (!f.getAccessFlags().isStatic()) {
+			if (!f.getAccessFlags().isStatic() && !isKotlinDataClassPrimaryField(f)) {
 				addField(clsCode, f);
 			}
 		}
@@ -342,6 +352,81 @@ public class ClassGen {
 			return false;
 		}
 		return !mth.getAccessFlags().isStatic();
+	}
+
+	private boolean isKotlinDataClassPrimaryField(FieldNode field) {
+		if (!isKotlinOutput()) {
+			return false;
+		}
+		KotlinDataClassAttr dataClassAttr = cls.get(AType.KOTLIN_DATA_CLASS);
+		return dataClassAttr != null && dataClassAttr.isPrimaryCtorField(field);
+	}
+
+	private void addKotlinDataClassPrimaryConstructor(ICodeWriter code) {
+		KotlinDataClassAttr dataClassAttr = cls.get(AType.KOTLIN_DATA_CLASS);
+		if (dataClassAttr == null) {
+			return;
+		}
+		MethodNode ctor = dataClassAttr.getPrimaryConstructor();
+		List<FieldNode> ctorFields = dataClassAttr.getPrimaryCtorFields();
+		if (ctorFields.isEmpty()) {
+			return;
+		}
+		MethodDefaultParamsAttr defaultParams = ctor.get(AType.METHOD_DEFAULT_PARAMS);
+		List<RegisterArg> args = ctor.getArgRegs();
+		code.add('(');
+		boolean first = true;
+		int fieldIdx = 0;
+		int paramIdx = -1;
+		for (int argNum = 0; argNum < args.size(); argNum++) {
+			if (SkipMethodArgsAttr.isSkip(ctor, argNum)) {
+				continue;
+			}
+			paramIdx++;
+			if (fieldIdx >= ctorFields.size()) {
+				break;
+			}
+			FieldNode field = ctorFields.get(fieldIdx++);
+			if (!first) {
+				code.add(", ");
+			} else {
+				first = false;
+			}
+			code.add("val ");
+			code.attachDefinition(field);
+			code.add(field.getAlias());
+			code.add(": ");
+			useType(code, field.getType());
+			if (defaultParams != null) {
+				MethodDefaultParamsAttr.DefaultValue defaultValue = defaultParams.getDefault(paramIdx);
+				if (defaultValue != null) {
+					code.add(" = ");
+					emitKotlinDefaultParamValue(code, ctor, defaultValue);
+				}
+			}
+		}
+		code.add(')');
+	}
+
+	private void emitKotlinDefaultParamValue(ICodeWriter code, MethodNode ctor, MethodDefaultParamsAttr.DefaultValue defaultValue) {
+		InsnNode valueInsn = defaultValue.getValueInsn();
+		if (valueInsn.getType() == InsnType.IGET) {
+			Object index = ((IndexInsnNode) valueInsn).getIndex();
+			if (index instanceof FieldInfo) {
+				FieldInfo fieldInfo = (FieldInfo) index;
+				if (fieldInfo.getDeclClass().equals(cls.getClassInfo())) {
+					code.add("this.");
+					code.add(fieldInfo.getAlias());
+					return;
+				}
+			}
+		}
+		try {
+			InsnGen insnGen = new InsnGen(new MethodGen(this, defaultValue.getSourceMth()), false);
+			insnGen.makeInsn(valueInsn, code, InsnGen.Flags.INLINE);
+		} catch (CodegenException e) {
+			code.add("/* default */");
+		}
 	}
 
 	private void addKotlinCompanion(ICodeWriter clsCode) throws CodegenException {

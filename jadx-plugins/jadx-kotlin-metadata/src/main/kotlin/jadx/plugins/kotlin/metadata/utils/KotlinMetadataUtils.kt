@@ -18,7 +18,7 @@ import kotlin.metadata.KmProperty
 import kotlin.metadata.isDelegated
 import kotlin.metadata.isLateinit
 import kotlin.metadata.isSuspend
-import kotlin.metadata.jvm.Metadata
+import kotlin.metadata.jvm.signature
 
 object KotlinMetadataUtils {
 
@@ -97,6 +97,22 @@ object KotlinMetadataUtils {
 			pos++
 			count++
 		}
+	}
+
+	fun mapConstructorArgs(cls: ClassNode, kmCls: KmClass): Map<MethodNode, List<MethodArgRename>> {
+		val kmCtor = kmCls.constructors.maxByOrNull { it.valueParameters.size } ?: return emptyMap()
+		val sig = kmCtor.signature?.toString() ?: return emptyMap()
+		val node = cls.searchMethodByShortId(sig) ?: return emptyMap()
+		val valueParams = kmCtor.valueParameters
+		val argRegs = node.argRegs
+		if (argRegs.size != valueParams.size) {
+			return emptyMap()
+		}
+		return mapOf(
+			node to argRegs.zip(valueParams) { rArg, kmValueParameter ->
+				MethodArgRename(rArg = rArg, alias = kmValueParameter.name)
+			},
+		)
 	}
 
 	fun mapMethodArgs(cls: ClassNode, kmCls: KmClass): Map<MethodNode, List<MethodArgRename>> {
