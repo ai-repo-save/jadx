@@ -11,6 +11,7 @@ import jadx.core.dex.instructions.NewArrayNode;
 import jadx.core.dex.instructions.args.ArgType;
 import jadx.core.dex.instructions.args.CodeVar;
 import jadx.core.dex.instructions.args.InsnArg;
+import jadx.core.dex.attributes.FieldInitInsnAttr;
 import jadx.core.dex.nodes.ClassNode;
 import jadx.core.dex.nodes.FieldNode;
 import jadx.core.dex.nodes.InsnNode;
@@ -45,6 +46,16 @@ public interface CodeLanguage {
 	void addSupertypes(IClassGen classGen, ICodeWriter code, AccessInfo af, ArgType superClass, ClassNode cls);
 
 	void emitFieldTypeAndName(IClassGen classGen, ICodeWriter code, FieldNode field, boolean isFinal);
+
+	/**
+	 * Emit language-specific field initializer suffix (e.g. Kotlin {@code by lazy { ... }}).
+	 *
+	 * @return {@code true} if initializer was emitted and default handling should be skipped
+	 */
+	default boolean emitFieldInitializer(IClassGen classGen, ICodeWriter code, FieldNode field,
+			FieldInitInsnAttr initInsnAttr, InsnGen insnGen) throws CodegenException {
+		return false;
+	}
 
 	void useType(IClassGen classGen, ICodeWriter code, ArgType type);
 

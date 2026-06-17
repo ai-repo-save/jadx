@@ -18,6 +18,7 @@ import jadx.core.dex.instructions.InvokeNode;
 import jadx.core.dex.instructions.mods.ConstructorInsn;
 import jadx.core.dex.instructions.IndexInsnNode;
 import jadx.core.dex.instructions.args.ArgType;
+import jadx.core.dex.instructions.args.ArgType;
 import jadx.core.dex.instructions.args.InsnArg;
 import jadx.core.dex.instructions.args.InsnWrapArg;
 import jadx.core.dex.instructions.args.RegisterArg;
@@ -318,7 +319,7 @@ public class KotlinPropertyVisitor extends AbstractVisitor {
 				return false;
 			}
 			ClassNode typeCls = root.resolveClass(callMth.getDeclClass().getType());
-			if (typeCls == null || !implementsKotlinLazy(typeCls, new HashSet<>())) {
+			if (typeCls == null || !isLazyLikeDelegateType(typeCls)) {
 				return false;
 			}
 			return isFunction0Type(callMth.getArgumentsTypes().get(0));
@@ -335,7 +336,24 @@ public class KotlinPropertyVisitor extends AbstractVisitor {
 		if (typeCls == null) {
 			return false;
 		}
-		return implementsKotlinLazy(typeCls, new HashSet<>());
+		return isLazyLikeDelegateType(typeCls);
+	}
+
+	private boolean isLazyLikeDelegateType(ClassNode typeCls) {
+		return implementsKotlinLazy(typeCls, new HashSet<>()) || hasSingleFunction0Constructor(typeCls);
+	}
+
+	private boolean hasSingleFunction0Constructor(ClassNode cls) {
+		for (MethodNode mth : cls.getMethods()) {
+			if (!mth.isConstructor()) {
+				continue;
+			}
+			List<ArgType> argTypes = mth.getMethodInfo().getArgumentsTypes();
+			if (argTypes.size() == 1 && isFunction0Type(argTypes.get(0))) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	private boolean implementsKotlinLazy(ClassNode cls, Set<String> visited) {
@@ -360,7 +378,7 @@ public class KotlinPropertyVisitor extends AbstractVisitor {
 	}
 
 	private boolean isLazyDelegateInit(InsnNode insn) {
-		InsnNode ctorInsn = unwrapInitInsn(insn);
+		InsnNode ctorInsn = KotlinLazyUtils.unwrapInitInsn(insn);
 		if (ctorInsn == null) {
 			return false;
 		}
@@ -381,7 +399,7 @@ public class KotlinPropertyVisitor extends AbstractVisitor {
 			return false;
 		}
 		ClassNode typeCls = root.resolveClass(callMth.getDeclClass().getType());
-		if (typeCls == null || !implementsKotlinLazy(typeCls, new HashSet<>())) {
+		if (typeCls == null || !isLazyLikeDelegateType(typeCls)) {
 			return false;
 		}
 		return isFunction0Type(callMth.getArgumentsTypes().get(0));
@@ -437,27 +455,5 @@ public class KotlinPropertyVisitor extends AbstractVisitor {
 		}
 		ClassNode parent = root.resolveClass(superClass);
 		return parent != null && implementsFunction0(parent, visited);
-	}
-
-	private static @Nullable InsnNode unwrapInitInsn(InsnNode insn) {
-		if (insn.getType() == InsnType.IPUT && insn.getArgsCount() >= 2) {
-			InsnArg val = insn.getArg(1);
-			if (val.isInsnWrap()) {
-				return unwrapInitInsn(((InsnWrapArg) val).getWrapInsn());
-			}
-			if (val.isRegister()) {
-				return null;
-			}
-		}
-		if (insn.getType() == InsnType.MOVE) {
-			InsnArg arg = insn.getArg(0);
-			if (arg.isInsnWrap()) {
-				return unwrapInitInsn(((InsnWrapArg) arg).getWrapInsn());
-			}
-		}
-		if (insn.getType() == InsnType.INVOKE || insn.getType() == InsnType.CONSTRUCTOR) {
-			return insn;
-		}
-		return null;
 	}
 }
