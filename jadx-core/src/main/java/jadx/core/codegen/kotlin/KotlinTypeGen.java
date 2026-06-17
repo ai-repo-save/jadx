@@ -3,10 +3,20 @@ package jadx.core.codegen.kotlin;
 import org.jetbrains.annotations.Nullable;
 
 import jadx.api.ICodeWriter;
+import jadx.api.plugins.input.data.AccessFlags;
+import jadx.api.plugins.input.data.attributes.JadxAttrType;
+import jadx.api.plugins.input.data.attributes.types.InnerClassesAttr;
+import jadx.api.plugins.input.data.attributes.types.InnerClsInfo;
 import jadx.core.codegen.api.IClassGen;
+import jadx.core.dex.attributes.AFlag;
+import jadx.core.dex.attributes.AType;
+import jadx.core.dex.attributes.nodes.FieldReplaceAttr;
+import jadx.core.dex.info.ClassInfo;
 import jadx.core.dex.instructions.args.ArgType;
 import jadx.core.dex.instructions.args.PrimitiveType;
 import jadx.core.dex.nodes.ClassNode;
+import jadx.core.dex.nodes.FieldNode;
+import jadx.core.dex.nodes.MethodNode;
 
 public final class KotlinTypeGen {
 
@@ -112,5 +122,59 @@ public final class KotlinTypeGen {
 
 	public static boolean isKotlinCompanionClass(ClassNode cls) {
 		return "Companion".equals(cls.getClassInfo().getAliasShortName());
+	}
+
+	/**
+	 * Kotlin {@code inner class} holds a reference to the outer instance (non-static nested class).
+	 */
+	public static boolean isKotlinInnerClass(ClassNode cls) {
+		if (!cls.isInner() || cls.contains(AType.ANONYMOUS_CLASS)) {
+			return false;
+		}
+		if (isKotlinCompanionClass(cls) || cls.getAccessFlags().isObject()) {
+			return false;
+		}
+		if (cls.getAccessFlags().isStatic()) {
+			return false;
+		}
+		ClassNode parent = cls.getParentClass();
+		if (parent == null) {
+			return false;
+		}
+		InnerClassesAttr innerClassesAttr = parent.get(JadxAttrType.INNER_CLASSES);
+		if (innerClassesAttr != null) {
+			InnerClsInfo innerClsInfo = innerClassesAttr.getMap().get(cls.getClassInfo().makeRawFullName());
+			if (innerClsInfo != null && (innerClsInfo.getAccessFlags() & AccessFlags.STATIC) != 0) {
+				return false;
+			}
+		}
+		ClassInfo parentClass = parent.getClassInfo();
+		if (hasOuterInstanceBinding(cls, parentClass)) {
+			return true;
+		}
+		for (MethodNode mth : cls.getMethods()) {
+			if (mth.isConstructor() && mth.contains(AFlag.SKIP_FIRST_ARG)) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	private static boolean hasOuterInstanceBinding(ClassNode cls, ClassInfo parentClass) {
+		for (FieldNode field : cls.getFields()) {
+			FieldReplaceAttr replace = field.get(AType.FIELD_REPLACE);
+			if (replace != null
+					&& replace.getReplaceType() == FieldReplaceAttr.ReplaceWith.CLASS_INSTANCE
+					&& parentClass.equals(replace.getClsRef())) {
+				return true;
+			}
+			if (field.getAccessFlags().isSynthetic() && field.getName().startsWith("this$")) {
+				ArgType type = field.getType();
+				if (type.isObject() && parentClass.getFullName().equals(type.getObject())) {
+					return true;
+				}
+			}
+		}
+		return false;
 	}
 }

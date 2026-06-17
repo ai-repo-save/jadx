@@ -19,7 +19,6 @@ import jadx.core.codegen.api.IClassGen;
 import jadx.core.codegen.api.IMethodGen;
 import jadx.core.codegen.common.ClassGenBase;
 import jadx.core.codegen.common.CodeGenFactory;
-import jadx.core.codegen.kotlin.KotlinTypeGen;
 import jadx.core.dex.attributes.AFlag;
 import jadx.core.dex.attributes.AType;
 import jadx.core.dex.attributes.nodes.KotlinDataClassAttr;
@@ -78,6 +77,9 @@ public final class KotlinClassGen extends ClassGenBase {
 		} else {
 			if (isDataClass) {
 				clsCode.add("data ");
+			}
+			if (KotlinTypeGen.isKotlinInnerClass(cls)) {
+				clsCode.add("inner ");
 			}
 			clsCode.add("class ");
 		}
