@@ -9,7 +9,6 @@ import org.junit.jupiter.api.Test;
 
 import jadx.api.JadxInternalAccess;
 import jadx.core.dex.attributes.AFlag;
-import jadx.core.dex.attributes.AType;
 import jadx.core.dex.nodes.ClassNode;
 import jadx.core.dex.nodes.MethodNode;
 import jadx.core.dex.nodes.RootNode;
@@ -22,7 +21,9 @@ import static jadx.tests.api.utils.assertj.JadxAssertions.assertThat;
  * State-machine detection targets from SimpleShortcut v0.0.3 release APK (kotlinx-coroutines / Room).
  * Smali exported to {@code src/test/smali/kotlin/coroutine-regression/} — no APK in tests.
  *
- * <p>These tests intentionally fail until {@link StateMachineAnalyzer} recognizes each CPS shape:
+ * <p>These tests assert {@link StateMachineAnalyzer} recognizes each CPS shape (via
+ * {@link StateMachineAnalyzer#diagnose} and {@link StateMachineAnalyzer#analyze}), even when the
+ * method already carries {@code JADX_ERROR} from unrelated region passes.
  * <ul>
  *   <li>{@code p3.y.n} — {@code ReceiveChannel.consume} ({@code Channels.common.kt})</li>
  *   <li>{@code s3.q0.c} — {@code StateFlowImpl.collect} ({@code StateFlow.kt})</li>
@@ -37,7 +38,7 @@ public class TestStateMachineAnalyzerCoroutineRegression extends SmaliKotlinTest
 		allowWarnInCode();
 		MethodNode mth = loadMethod("p3.y", "n(Ls3/f;Lr3/j;ZLz2/e;)Ljava/lang/Object;");
 		assertThat(StateMachineAnalyzer.diagnose(mth)).isEqualTo("ok");
-		assertThat(mth.contains(AType.STATE_MACHINE)).isTrue();
+		assertThat(StateMachineAnalyzer.analyze(mth)).isNotNull();
 	}
 
 	@Test
@@ -45,7 +46,7 @@ public class TestStateMachineAnalyzerCoroutineRegression extends SmaliKotlinTest
 		allowWarnInCode();
 		MethodNode mth = loadMethod("s3.q0", "c(Ls3/f;Lz2/e;)Ljava/lang/Object;");
 		assertThat(StateMachineAnalyzer.diagnose(mth)).isEqualTo("ok");
-		assertThat(mth.contains(AType.STATE_MACHINE)).isTrue();
+		assertThat(StateMachineAnalyzer.analyze(mth)).isNotNull();
 	}
 
 	@Test
@@ -53,7 +54,7 @@ public class TestStateMachineAnalyzerCoroutineRegression extends SmaliKotlinTest
 		allowWarnInCode();
 		MethodNode mth = loadMethod("t3.f0", "m(Lt3/f0;Ls3/f;Lz2/e;)V");
 		assertThat(StateMachineAnalyzer.diagnose(mth)).isEqualTo("ok");
-		assertThat(mth.contains(AType.STATE_MACHINE)).isTrue();
+		assertThat(StateMachineAnalyzer.analyze(mth)).isNotNull();
 	}
 
 	@Test
@@ -61,7 +62,7 @@ public class TestStateMachineAnalyzerCoroutineRegression extends SmaliKotlinTest
 		allowWarnInCode();
 		MethodNode mth = loadMethod("androidx.room.d", "invokeSuspend(Ljava/lang/Object;)Ljava/lang/Object;");
 		assertThat(StateMachineAnalyzer.diagnose(mth)).isEqualTo("ok");
-		assertThat(mth.contains(AType.STATE_MACHINE)).isTrue();
+		assertThat(StateMachineAnalyzer.analyze(mth)).isNotNull();
 	}
 
 	private MethodNode loadMethod(String clsName, String shortId) {

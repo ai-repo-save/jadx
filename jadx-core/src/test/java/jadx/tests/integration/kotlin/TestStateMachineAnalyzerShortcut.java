@@ -48,7 +48,13 @@ public class TestStateMachineAnalyzerShortcut extends SmaliKotlinTest {
 		MethodNode mth = cls.searchMethodByShortName("invokeSuspend");
 		assertThat(mth).isNotNull();
 		assertThat(mth.contains(AType.JADX_ERROR)).isFalse();
-		assertThat(StateMachineAnalyzer.analyze(mth)).isNull();
+		assertThat(StateMachineAnalyzer.diagnose(mth)).isEqualTo("ok");
+		assertThat(StateMachineAnalyzer.analyze(mth)).isNotNull();
+		assertThat(cls)
+				.code()
+				.contains("invokeSuspend")
+				.doesNotContain("JADX ERROR")
+				.doesNotContain("Method not decompiled");
 	}
 
 	@Test

@@ -171,9 +171,10 @@ public final class StateMachineAnalyzer {
 	}
 
 	private static boolean isSuspendedMarkerUsed(MethodNode mth, RegisterArg markerReg) {
+		boolean voidReturn = mth.isVoidReturn();
 		for (BlockNode block : mth.getBasicBlocks()) {
 			for (InsnNode insn : block.getInstructions()) {
-				if (insn instanceof IfNode && isSuspendCheck((IfNode) insn, markerReg)) {
+				if (insn instanceof IfNode && isSuspendCheck((IfNode) insn, markerReg, voidReturn)) {
 					return true;
 				}
 			}
@@ -182,6 +183,15 @@ public final class StateMachineAnalyzer {
 	}
 
 	private static @Nullable FieldInfo findLabelField(MethodNode mth) {
+		FieldInfo fromMask = findLabelFieldFromSuspendedMask(mth);
+		if (fromMask != null) {
+			return fromMask;
+		}
+		// Room / inlined invokeSuspend: label dispatch without suspended-bit probe in this method
+		return findLabelFieldFromDispatch(mth);
+	}
+
+	private static @Nullable FieldInfo findLabelFieldFromSuspendedMask(MethodNode mth) {
 		for (BlockNode block : mth.getBasicBlocks()) {
 			List<InsnNode> insns = block.getInstructions();
 			for (int i = 0; i < insns.size(); i++) {
@@ -303,6 +313,33 @@ public final class StateMachineAnalyzer {
 		return null;
 	}
 
+	private static @Nullable FieldInfo findLabelFieldFromDispatch(MethodNode mth) {
+		if (findCoroutineSuspendedMarkerInsn(mth) == null) {
+			return null;
+		}
+		for (BlockNode block : mth.getBasicBlocks()) {
+			List<InsnNode> insns = block.getInstructions();
+			for (int i = 0; i < insns.size(); i++) {
+				InsnNode insn = insns.get(i);
+				if (insn.getType() != InsnType.IGET) {
+					continue;
+				}
+				FieldInfo field = getFieldInsn(insn);
+				if (field == null || !field.getType().equals(ArgType.INT)) {
+					continue;
+				}
+				if (hasSuspendedBitMaskInBlock(insns, i)) {
+					continue;
+				}
+				if (findDispatchIfInBlock(mth, block, i + 1) != null
+						|| findFirstDispatchIfBlock(mth, block, i) != null) {
+					return field;
+				}
+			}
+		}
+		return null;
+	}
+
 	private static @Nullable BlockNode findDispatchBlock(MethodNode mth, FieldInfo labelField) {
 		for (BlockNode block : mth.getBasicBlocks()) {
 			List<InsnNode> insns = block.getInstructions();
@@ -315,8 +352,12 @@ public final class StateMachineAnalyzer {
 				if (!Objects.equals(field, labelField)) {
 					continue;
 				}
-				if (hasSuspendedBitMask(mth, block, insns, i, labelField)) {
+				if (hasSuspendedBitMaskInBlock(insns, i)) {
 					continue;
+				}
+				IfNode dispatchIf = findDispatchIfInBlock(mth, block, i + 1);
+				if (dispatchIf != null) {
+					return block;
 				}
 				BlockNode dispatch = findFirstDispatchIfBlock(mth, block, i);
 				if (dispatch != null) {
@@ -327,30 +368,42 @@ public final class StateMachineAnalyzer {
 		return null;
 	}
 
-	private static @Nullable BlockNode findFirstDispatchIfBlock(MethodNode mth, BlockNode startBlock, int fromInsnIndex) {
-		BlockNode block = startBlock;
-		for (int steps = 0; steps < 8 && block != null; steps++) {
-			List<InsnNode> insns = block.getInstructions();
-			int start = block == startBlock ? fromInsnIndex + 1 : 0;
-			for (int i = start; i < insns.size(); i++) {
-				InsnNode insn = insns.get(i);
-				if (insn instanceof IfNode && isDispatchIf(mth, (IfNode) insn)) {
-					return block;
-				}
+	private static @Nullable IfNode findDispatchIfInBlock(MethodNode mth, BlockNode block, int fromInsnIndex) {
+		List<InsnNode> insns = block.getInstructions();
+		for (int i = fromInsnIndex; i < insns.size(); i++) {
+			InsnNode insn = insns.get(i);
+			if (insn instanceof IfNode && isDispatchIf(mth, block, (IfNode) insn)) {
+				return (IfNode) insn;
 			}
-			block = singleLinearSucc(block);
 		}
 		return null;
 	}
 
-	private static boolean isDispatchIf(MethodNode mth, IfNode ifInsn) {
+	private static @Nullable BlockNode findFirstDispatchIfBlock(MethodNode mth, BlockNode startBlock, int fromInsnIndex) {
+		BlockNode block = startBlock;
+		for (int steps = 0; steps < 12 && block != null; steps++) {
+			List<InsnNode> insns = block.getInstructions();
+			int start = block == startBlock ? fromInsnIndex + 1 : 0;
+			for (int i = start; i < insns.size(); i++) {
+				InsnNode insn = insns.get(i);
+				if (insn instanceof IfNode && isDispatchIf(mth, block, (IfNode) insn)) {
+					return block;
+				}
+			}
+			BlockNode next = singleLinearSucc(block);
+			block = next != null ? BlockUtils.followEmptyPath(next) : null;
+		}
+		return null;
+	}
+
+	private static boolean isDispatchIf(MethodNode mth, BlockNode block, IfNode ifInsn) {
 		if (isSuspendedBitCheckInsn(ifInsn)) {
 			return false;
 		}
 		if (ifInsn.getOp() != IfOp.EQ && ifInsn.getOp() != IfOp.NE) {
 			return false;
 		}
-		return extractDispatchLabel(mth, ifInsn) != null;
+		return extractDispatchLabel(mth, block, ifInsn) != null;
 	}
 
 	private static Map<Integer, BlockNode> parseLabelDispatch(MethodNode mth, BlockNode start, FieldInfo labelField) {
@@ -362,7 +415,7 @@ public final class StateMachineAnalyzer {
 			if (dispatchIf == null) {
 				break;
 			}
-			Integer label = extractDispatchLabel(mth, dispatchIf);
+			Integer label = extractDispatchLabel(mth, block, dispatchIf);
 			BlockNode entry = extractDispatchEntry(dispatchIf);
 			if (label != null && entry != null && !isResumeBeforeInvokeThrow(entry)) {
 				map.putIfAbsent(label, entry);
@@ -374,7 +427,7 @@ public final class StateMachineAnalyzer {
 
 	private static @Nullable IfNode findDispatchIf(MethodNode mth, BlockNode block) {
 		for (InsnNode insn : block.getInstructions()) {
-			if (insn instanceof IfNode && isDispatchIf(mth, (IfNode) insn)) {
+			if (insn instanceof IfNode && isDispatchIf(mth, block, (IfNode) insn)) {
 				return (IfNode) insn;
 			}
 		}
@@ -402,15 +455,21 @@ public final class StateMachineAnalyzer {
 		return null;
 	}
 
-	private static @Nullable Integer extractDispatchLabel(MethodNode mth, IfNode ifInsn) {
+	private static @Nullable Integer extractDispatchLabel(MethodNode mth, BlockNode block, IfNode ifInsn) {
 		if (ifInsn.getOp() == IfOp.EQ && ifInsn.getArg(1).isZeroLiteral()) {
 			return 0;
 		}
 		if (ifInsn.getOp() == IfOp.EQ && ifInsn.getArg(0).isZeroLiteral()) {
 			return 0;
 		}
+		if (ifInsn.getOp() == IfOp.NE && ifInsn.getArg(1).isZeroLiteral()) {
+			return 0;
+		}
+		if (ifInsn.getOp() == IfOp.NE && ifInsn.getArg(0).isZeroLiteral()) {
+			return 0;
+		}
 		if (ifInsn.getOp() == IfOp.EQ || ifInsn.getOp() == IfOp.NE) {
-			return getComparedLabel(mth, ifInsn);
+			return getComparedLabel(mth, block, ifInsn);
 		}
 		return null;
 	}
@@ -436,14 +495,66 @@ public final class StateMachineAnalyzer {
 		return null;
 	}
 
-	private static @Nullable Integer getComparedLabel(MethodNode mth, IfNode ifInsn) {
+	private static @Nullable Integer getComparedLabel(MethodNode mth, BlockNode block, IfNode ifInsn) {
 		InsnArg a = ifInsn.getArg(0);
 		InsnArg b = ifInsn.getArg(1);
-		Integer label = getConstIntValue(mth, b);
+		Integer label = resolveIntConst(mth, block, b);
 		if (label != null) {
 			return label;
 		}
-		return getConstIntValue(mth, a);
+		return resolveIntConst(mth, block, a);
+	}
+
+	private static @Nullable Integer resolveIntConst(MethodNode mth, BlockNode block, InsnArg arg) {
+		Integer label = getConstIntValue(mth, arg);
+		if (label != null) {
+			return label;
+		}
+		if (!arg.isRegister()) {
+			return null;
+		}
+		label = findIntConstForReg(block, arg);
+		if (label != null) {
+			return label;
+		}
+		return findIntConstForRegBackward(block, (RegisterArg) arg);
+	}
+
+	private static @Nullable Integer findIntConstForRegBackward(BlockNode start, RegisterArg target) {
+		ArrayDeque<BlockNode> queue = new ArrayDeque<>();
+		Set<BlockNode> visited = new HashSet<>();
+		queue.add(start);
+		while (!queue.isEmpty() && visited.size() < 48) {
+			BlockNode block = queue.poll();
+			if (!visited.add(block)) {
+				continue;
+			}
+			Integer label = findIntConstForReg(block, target);
+			if (label != null) {
+				return label;
+			}
+			for (BlockNode pred : block.getPredecessors()) {
+				queue.add(pred);
+			}
+		}
+		return null;
+	}
+
+	private static @Nullable Integer findIntConstForReg(BlockNode block, InsnArg reg) {
+		if (!reg.isRegister()) {
+			return null;
+		}
+		RegisterArg target = (RegisterArg) reg;
+		for (InsnNode insn : block.getInstructions()) {
+			if (insn.getType() != InsnType.CONST || insn.getResult() == null) {
+				continue;
+			}
+			if (!sameRegister(insn.getResult(), target) || !insn.getArg(0).isLiteral()) {
+				continue;
+			}
+			return (int) ((LiteralArg) insn.getArg(0)).getLiteral();
+		}
+		return null;
 	}
 
 	private static @Nullable Integer getConstIntValue(MethodNode mth, InsnArg arg) {
@@ -460,20 +571,24 @@ public final class StateMachineAnalyzer {
 			RegisterArg suspendedReg) {
 		List<SuspendPoint> points = new ArrayList<>();
 		Set<String> seen = new HashSet<>();
+		boolean voidReturn = mth.isVoidReturn();
 		for (BlockNode checkBlock : mth.getBasicBlocks()) {
 			for (InsnNode insn : checkBlock.getInstructions()) {
 				if (!(insn instanceof IfNode)) {
 					continue;
 				}
 				IfNode ifInsn = (IfNode) insn;
-				if (!isSuspendCheck(ifInsn, suspendedReg)) {
+				if (!isSuspendCheck(ifInsn, suspendedReg, voidReturn)) {
 					continue;
 				}
 				InvokeSite invokeSite = findSuspendInvoke(ifInsn, checkBlock);
 				if (invokeSite == null) {
 					continue;
 				}
-				LabelStore store = findLabelStoreBeforeSuspend(checkBlock, labelField);
+				LabelStore store = findLabelStoreBeforeSuspend(mth, checkBlock, labelField);
+				if (store == null) {
+					store = findLabelStoreBeforeSuspend(mth, invokeSite.block, labelField);
+				}
 				if (store == null) {
 					continue;
 				}
@@ -493,36 +608,42 @@ public final class StateMachineAnalyzer {
 		return points;
 	}
 
-	private static boolean isSuspendCheck(IfNode ifInsn, RegisterArg suspendedReg) {
+	private static boolean isSuspendCheck(IfNode ifInsn, RegisterArg suspendedReg, boolean voidReturn) {
 		if (ifInsn.getOp() != IfOp.NE && ifInsn.getOp() != IfOp.EQ) {
 			return false;
 		}
 		if (!referencesSuspendedReg(ifInsn, suspendedReg)) {
 			return false;
 		}
-		return isSuspendedReturnBlock(ifInsn.getThenBlock(), suspendedReg)
-				|| isSuspendedReturnBlock(ifInsn.getElseBlock(), suspendedReg);
+		return isSuspendedReturnBlock(ifInsn.getThenBlock(), suspendedReg, voidReturn)
+				|| isSuspendedReturnBlock(ifInsn.getElseBlock(), suspendedReg, voidReturn);
 	}
 
 	private static boolean referencesSuspendedReg(IfNode ifInsn, RegisterArg suspendedReg) {
 		return sameRegister(ifInsn.getArg(0), suspendedReg) || sameRegister(ifInsn.getArg(1), suspendedReg);
 	}
 
-	private static boolean isSuspendedReturnBlock(@Nullable BlockNode block, RegisterArg suspendedReg) {
+	private static boolean isSuspendedReturnBlock(@Nullable BlockNode block, RegisterArg suspendedReg, boolean voidReturn) {
 		block = BlockUtils.followEmptyPath(block);
 		if (block == null) {
 			return false;
 		}
-		List<InsnNode> insns = block.getInstructions();
-		if (insns.size() != 1) {
-			return false;
+		for (InsnNode insn : block.getInstructions()) {
+			if (insn.getType() != InsnType.RETURN) {
+				continue;
+			}
+			if (voidReturn) {
+				if (insn.getArgsCount() == 0) {
+					return true;
+				}
+				continue;
+			}
+			if (insn.getArgsCount() == 1 && insn.getArg(0).isRegister()
+					&& sameRegister(insn.getArg(0), suspendedReg)) {
+				return true;
+			}
 		}
-		InsnNode retInsn = insns.get(0);
-		if (retInsn.getType() != InsnType.RETURN || retInsn.getArgsCount() == 0) {
-			return false;
-		}
-		InsnArg retArg = retInsn.getArg(0);
-		return retArg.isRegister() && sameRegister(retArg, suspendedReg);
+		return false;
 	}
 
 	private static @Nullable InvokeSite findSuspendInvoke(IfNode ifInsn, BlockNode checkBlock) {
@@ -533,13 +654,21 @@ public final class StateMachineAnalyzer {
 		if (wrapped != null && hasContinuationArg(wrapped)) {
 			return new InvokeSite(checkBlock, wrapped);
 		}
-		BlockNode block = checkBlock;
-		for (int depth = 0; depth < 12 && block != null; depth++) {
-			InsnNode invoke = findLastInvoke(block);
-			if (invoke != null && hasContinuationArg(invoke)) {
+		ArrayDeque<BlockNode> queue = new ArrayDeque<>();
+		Set<BlockNode> visited = new HashSet<>();
+		queue.add(checkBlock);
+		while (!queue.isEmpty() && visited.size() < 48) {
+			BlockNode block = queue.poll();
+			if (!visited.add(block)) {
+				continue;
+			}
+			InsnNode invoke = findInvokeWithContinuation(block);
+			if (invoke != null) {
 				return new InvokeSite(block, invoke);
 			}
-			block = singlePred(block);
+			for (BlockNode pred : block.getPredecessors()) {
+				queue.add(pred);
+			}
 		}
 		return null;
 	}
@@ -555,16 +684,16 @@ public final class StateMachineAnalyzer {
 		return null;
 	}
 
-	private static @Nullable LabelStore findLabelStoreBeforeSuspend(BlockNode start, FieldInfo labelField) {
+	private static @Nullable LabelStore findLabelStoreBeforeSuspend(MethodNode mth, BlockNode start, FieldInfo labelField) {
 		ArrayDeque<BlockNode> queue = new ArrayDeque<>();
 		Set<BlockNode> visited = new HashSet<>();
 		queue.add(start);
-		while (!queue.isEmpty() && visited.size() < 60) {
+		while (!queue.isEmpty() && visited.size() < 128) {
 			BlockNode block = queue.poll();
 			if (!visited.add(block)) {
 				continue;
 			}
-			LabelStore store = findLastLabelStoreInBlock(block, labelField);
+			LabelStore store = findLastLabelStoreInBlock(mth, block, labelField);
 			if (store != null) {
 				return store;
 			}
@@ -575,7 +704,7 @@ public final class StateMachineAnalyzer {
 		return null;
 	}
 
-	private static @Nullable LabelStore findLastLabelStoreInBlock(BlockNode block, FieldInfo labelField) {
+	private static @Nullable LabelStore findLastLabelStoreInBlock(MethodNode mth, BlockNode block, FieldInfo labelField) {
 		List<InsnNode> insns = block.getInstructions();
 		for (int i = insns.size() - 1; i >= 0; i--) {
 			InsnNode insn = insns.get(i);
@@ -588,7 +717,7 @@ public final class StateMachineAnalyzer {
 			if (isSuspendedBitUnwrapInsn(insn, labelField)) {
 				continue;
 			}
-			Integer label = getIputIntLabel(insn, insns);
+			Integer label = getIputIntLabel(mth, block, insn, insns);
 			if (label != null && label > 0) {
 				return new LabelStore(label, block, insn);
 			}
@@ -596,12 +725,19 @@ public final class StateMachineAnalyzer {
 		return null;
 	}
 
-	private static @Nullable Integer getIputIntLabel(InsnNode iputInsn, List<InsnNode> insns) {
+	private static @Nullable Integer getIputIntLabel(MethodNode mth, BlockNode block, InsnNode iputInsn, List<InsnNode> insns) {
 		InsnArg val = iputInsn.getArg(0);
 		if (val.isLiteral()) {
 			return (int) ((LiteralArg) val).getLiteral();
 		}
-		return findIntConstBefore(insns, iputInsn);
+		Integer label = findIntConstBefore(insns, iputInsn);
+		if (label != null) {
+			return label;
+		}
+		if (val.isRegister()) {
+			return findIntConstForRegBackward(block, (RegisterArg) val);
+		}
+		return null;
 	}
 
 	private static @Nullable Integer findIntConstBefore(List<InsnNode> insns, InsnNode iputInsn) {
@@ -624,23 +760,32 @@ public final class StateMachineAnalyzer {
 	}
 
 	private static boolean hasContinuationArg(InsnNode invoke) {
-		if (!(invoke instanceof InvokeNode) || invoke.getArgsCount() == 0) {
+		if (!(invoke instanceof InvokeNode)) {
 			return false;
 		}
 		InvokeNode inv = (InvokeNode) invoke;
+		if (inv.getArgsCount() < 2) {
+			return false;
+		}
 		if (!inv.getCallMth().getReturnType().isObject()) {
 			return false;
 		}
 		InsnArg lastArg = inv.getArg(inv.getArgsCount() - 1);
-		if (!lastArg.isRegister() || !lastArg.getType().isObject()) {
+		if (!lastArg.isRegister()) {
 			return false;
 		}
-		String lastType = lastArg.getType().toString();
-		if (lastType.contains("Continuation")) {
-			return true;
+		ArgType lastType = lastArg.getType();
+		return lastType.isObject() || lastType.equals(ArgType.UNKNOWN);
+	}
+
+	private static @Nullable InsnNode findInvokeWithContinuation(BlockNode block) {
+		InsnNode last = null;
+		for (InsnNode insn : block.getInstructions()) {
+			if (insn.getType() == InsnType.INVOKE && hasContinuationArg(insn)) {
+				last = insn;
+			}
 		}
-		// Kotlin suspend stub: trailing Object continuation parameter (often obfuscated, e.g. Lz2/e;)
-		return true;
+		return last;
 	}
 
 	private static @Nullable InsnNode findLastInvoke(BlockNode block) {
