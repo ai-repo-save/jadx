@@ -70,7 +70,11 @@ class KotlinCodeLanguage implements CodeLanguage {
 
 	@Override
 	public AccessInfo filterClassAccess(AccessInfo access) {
-		return CodeLanguage.removeJavaOnlyFlags(access);
+		AccessInfo filtered = CodeLanguage.removeJavaOnlyFlags(access);
+		if (access.isData()) {
+			filtered = filtered.remove(AccessFlags.DATA);
+		}
+		return filtered;
 	}
 
 	@Override

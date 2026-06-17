@@ -201,6 +201,7 @@ public class ClassGen {
 		CodeGenUtils.addInputFileInfo(clsCode, cls);
 
 		annotationGen.addForClass(clsCode);
+		boolean isDataClass = af.isData();
 		af = lang.filterClassAccess(af);
 		clsCode.startLineWithNum(cls.getSourceLine()).add(af.makeString(cls.checkCommentsLevel(CommentsLevel.INFO)));
 		if (af.isInterface()) {
@@ -211,6 +212,9 @@ public class ClassGen {
 		} else if (af.isEnum()) {
 			clsCode.add(lang.enumClassKeyword());
 		} else {
+			if (isDataClass && lang.isKotlin()) {
+				clsCode.add("data ");
+			}
 			clsCode.add("class ");
 		}
 		clsCode.attachDefinition(cls);
