@@ -15,6 +15,7 @@ import jadx.core.dex.attributes.nodes.SkipMethodArgsAttr
 import jadx.core.dex.nodes.ClassNode
 import jadx.core.dex.nodes.MethodNode
 import jadx.core.dex.nodes.RootNode
+import jadx.core.dex.visitors.kotlin.KotlinDefaultArgsVisitor
 import jadx.plugins.kotlin.metadata.KotlinMetadataOptions
 import jadx.plugins.kotlin.metadata.utils.KmClassWrapper
 import jadx.plugins.kotlin.metadata.utils.KmClassWrapper.Companion.getWrapper
@@ -27,7 +28,7 @@ class KotlinMetadataDecompilePass(
 		"KotlinMetadataDecompile",
 		"Use kotlin.Metadata annotation perform various renames",
 	)
-		.before("CodeRenameVisitor")
+		.after("KotlinDefaultArgsVisitor")
 
 	override fun init(root: RootNode) {
 	}
@@ -36,10 +37,19 @@ class KotlinMetadataDecompilePass(
 		cls.innerClasses.forEach(::visit)
 
 		val wrapper = cls.getWrapper() ?: return false
-		if (options.isMethodArgs) renameMethodArgs(wrapper)
+		if (options.isMethodArgs) {
+			renameMethodArgs(wrapper)
+			renameConstructorArgs(wrapper)
+		}
 		if (options.isFields) renameFields(wrapper)
 		if (options.isCompanion) renameCompanion(wrapper)
-		if (options.isDataClass) fixDataClass(wrapper)
+		if (options.isDataClass) {
+			fixDataClass(wrapper)
+			if (wrapper.cls.root().args.isKotlinOutput) {
+				KotlinDefaultArgsVisitor.processDataClass(wrapper.cls)
+				KotlinDefaultArgsVisitor.processDataClassCopy(wrapper.cls)
+			}
+		}
 		if (options.isObjectClass) fixObjectClass(wrapper)
 		if (options.isSuspendFun) fixSuspendFunctions(wrapper)
 		if (options.isPropertyFlags) fixPropertyFlags(wrapper)
@@ -51,6 +61,16 @@ class KotlinMetadataDecompilePass(
 
 	override fun visit(mth: MethodNode?) {
 		/* no op */
+	}
+
+	private fun renameConstructorArgs(wrapper: KmClassWrapper) {
+		val args = wrapper.getConstructorArgs()
+		args.forEach { (_, list) ->
+			list.forEach { (rArg, alias) ->
+				RenameReasonAttr.forNode(rArg).append(METADATA_REASON)
+				rArg.name = alias
+			}
+		}
 	}
 
 	private fun renameMethodArgs(wrapper: KmClassWrapper) {

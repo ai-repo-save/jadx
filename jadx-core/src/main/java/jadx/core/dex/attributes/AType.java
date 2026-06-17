@@ -19,6 +19,7 @@ import jadx.core.dex.attributes.nodes.InlinedAttr;
 import jadx.core.dex.attributes.nodes.JadxCommentsAttr;
 import jadx.core.dex.attributes.nodes.JadxError;
 import jadx.core.dex.attributes.nodes.JumpInfo;
+import jadx.core.dex.attributes.nodes.KotlinDataClassAttr;
 import jadx.core.dex.attributes.nodes.KotlinFieldFlagsAttr;
 import jadx.core.dex.attributes.nodes.MethodDefaultParamsAttr;
 import jadx.core.dex.attributes.nodes.LocalVarsDebugInfoAttr;
@@ -73,6 +74,7 @@ public final class AType<T extends IJadxAttribute> implements IJadxAttrType<T> {
 	// field
 	public static final AType<FieldInitInsnAttr> FIELD_INIT_INSN = new AType<>();
 	public static final AType<FieldReplaceAttr> FIELD_REPLACE = new AType<>();
+	public static final AType<KotlinDataClassAttr> KOTLIN_DATA_CLASS = new AType<>();
 	public static final AType<KotlinFieldFlagsAttr> KOTLIN_FIELD_FLAGS = new AType<>();
 	public static final AType<MethodDefaultParamsAttr> METHOD_DEFAULT_PARAMS = new AType<>();
 
