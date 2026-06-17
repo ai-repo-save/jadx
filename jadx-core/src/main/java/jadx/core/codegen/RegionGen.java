@@ -54,10 +54,12 @@ import jadx.core.utils.Utils;
 import jadx.core.utils.exceptions.CodegenException;
 import jadx.core.utils.exceptions.JadxRuntimeException;
 
+import jadx.core.codegen.api.IMethodGen;
+
 public class RegionGen extends InsnGen {
 	private static final Logger LOG = LoggerFactory.getLogger(RegionGen.class);
 
-	public RegionGen(MethodGen mgen) {
+	public RegionGen(IMethodGen mgen) {
 		super(mgen, false);
 	}
 

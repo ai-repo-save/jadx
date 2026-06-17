@@ -15,6 +15,10 @@ import jadx.api.metadata.annotations.InsnCodeOffset;
 import jadx.api.metadata.annotations.VarNode;
 import jadx.api.plugins.input.data.MethodHandleType;
 import jadx.api.plugins.input.data.annotations.EncodedValue;
+import jadx.core.codegen.api.IClassGen;
+import jadx.core.codegen.api.IMethodGen;
+import jadx.core.codegen.common.CodeGenFactory;
+import jadx.core.codegen.common.MethodGenBase;
 import jadx.core.codegen.lang.CodeLanguage;
 import jadx.core.codegen.utils.CodeGenUtils;
 import jadx.core.dex.attributes.AFlag;
@@ -71,18 +75,18 @@ import static jadx.core.utils.android.AndroidResourcesUtils.handleAppResField;
 public class InsnGen {
 	private static final Logger LOG = LoggerFactory.getLogger(InsnGen.class);
 
-	protected final MethodGen mgen;
+	protected final IMethodGen mgen;
 	protected final MethodNode mth;
 	protected final RootNode root;
 	protected final boolean fallback;
 
-	protected enum Flags {
+	public enum Flags {
 		BODY_ONLY,
 		BODY_ONLY_NOWRAP,
 		INLINE
 	}
 
-	public InsnGen(MethodGen mgen, boolean fallback) {
+	public InsnGen(IMethodGen mgen, boolean fallback) {
 		this.mgen = mgen;
 		this.mth = mgen.getMethodNode();
 		this.root = mth.root();
@@ -93,7 +97,7 @@ public class InsnGen {
 		return mgen.getClassGen().getLang();
 	}
 
-	public ClassGen getClassGen() {
+	public IClassGen getClassGen() {
 		return mgen.getClassGen();
 	}
 
@@ -234,13 +238,13 @@ public class InsnGen {
 		makeStaticFieldAccess(code, field, fieldNode, mgen.getClassGen());
 	}
 
-	public static void makeStaticFieldAccess(ICodeWriter code, FieldInfo field, ClassGen clsGen) {
+	public static void makeStaticFieldAccess(ICodeWriter code, FieldInfo field, IClassGen clsGen) {
 		FieldNode fieldNode = clsGen.getClassNode().root().resolveField(field);
 		makeStaticFieldAccess(code, field, fieldNode, clsGen);
 	}
 
 	private static void makeStaticFieldAccess(ICodeWriter code,
-			FieldInfo field, @Nullable FieldNode fieldNode, ClassGen clsGen) {
+			FieldInfo field, @Nullable FieldNode fieldNode, IClassGen clsGen) {
 		ClassInfo declClass = field.getDeclClass();
 		// TODO
 		boolean fieldFromThisClass = clsGen.getClassNode().getClassInfo().equals(declClass);
@@ -281,7 +285,7 @@ public class InsnGen {
 	private static final Set<Flags> BODY_ONLY_FLAG = EnumSet.of(Flags.BODY_ONLY);
 	private static final Set<Flags> BODY_ONLY_NOWRAP_FLAGS = EnumSet.of(Flags.BODY_ONLY_NOWRAP);
 
-	protected void makeInsn(InsnNode insn, ICodeWriter code, Flags flag) throws CodegenException {
+	public void makeInsn(InsnNode insn, ICodeWriter code, Flags flag) throws CodegenException {
 		if (insn.getType() == InsnType.REGION_ARG) {
 			return;
 		}
@@ -526,12 +530,12 @@ public class InsnGen {
 				code.add(' ');
 				code.add(ifInsn.getOp().getSymbol()).add(' ');
 				addArg(code, insn.getArg(1));
-				code.add(") goto ").add(MethodGen.getLabelName(ifInsn));
+				code.add(") goto ").add(MethodGenBase.getLabelName(ifInsn));
 				break;
 
 			case GOTO:
 				fallbackOnlyInsn(insn);
-				code.add("goto ").add(MethodGen.getLabelName(((GotoNode) insn).getTarget()));
+				code.add("goto ").add(MethodGenBase.getLabelName(((GotoNode) insn).getTarget()));
 				break;
 
 			case MOVE_EXCEPTION:
@@ -552,18 +556,18 @@ public class InsnGen {
 				if (targetBlocks != null) {
 					for (int i = 0; i < size; i++) {
 						code.startLine("case ").add(Integer.toString(keys[i])).add(": goto ");
-						code.add(MethodGen.getLabelName(targetBlocks[i])).add(';');
+						code.add(MethodGenBase.getLabelName(targetBlocks[i])).add(';');
 					}
 					code.startLine("default: goto ");
-					code.add(MethodGen.getLabelName(sw.getDefTargetBlock())).add(';');
+					code.add(MethodGenBase.getLabelName(sw.getDefTargetBlock())).add(';');
 				} else {
 					int[] targets = sw.getTargets();
 					for (int i = 0; i < size; i++) {
 						code.startLine("case ").add(Integer.toString(keys[i])).add(": goto ");
-						code.add(MethodGen.getLabelName(targets[i])).add(';');
+						code.add(MethodGenBase.getLabelName(targets[i])).add(';');
 					}
 					code.startLine("default: goto ");
-					code.add(MethodGen.getLabelName(sw.getDefaultCaseOffset())).add(';');
+					code.add(MethodGenBase.getLabelName(sw.getDefaultCaseOffset())).add(';');
 				}
 				code.decIndent();
 				code.startLine('}');
@@ -613,7 +617,7 @@ public class InsnGen {
 
 			case JAVA_JSR:
 				fallbackOnlyInsn(insn);
-				code.add("jsr -> ").add(MethodGen.getLabelName(((JsrNode) insn).getTarget()));
+				code.add("jsr -> ").add(MethodGenBase.getLabelName(((JsrNode) insn).getTarget()));
 				break;
 
 			case JAVA_RET:
@@ -799,7 +803,7 @@ public class InsnGen {
 		generateMethodArguments(code, insn, 0, callMth);
 		code.add(' ');
 
-		ClassGen classGen = new ClassGen(cls, mgen.getClassGen().getParentGen());
+		IClassGen classGen = CodeGenFactory.createClassGen(cls, mgen.getClassGen().getParentGen());
 		classGen.setOuterNameGen(mgen.getNameGen());
 		classGen.addClassBody(code, true);
 
@@ -989,7 +993,7 @@ public class InsnGen {
 	}
 
 	private void makeInlinedLambdaMethod(ICodeWriter code, InvokeCustomNode customNode, MethodNode callMth) throws CodegenException {
-		MethodGen callMthGen = new MethodGen(mgen.getClassGen(), callMth);
+		IMethodGen callMthGen = CodeGenFactory.createMethodGen(mgen.getClassGen(), callMth);
 		NameGen nameGen = callMthGen.getNameGen();
 		nameGen.inheritUsedNames(this.mgen.getNameGen());
 
@@ -1075,7 +1079,7 @@ public class InsnGen {
 		}
 	}
 
-	void generateMethodArguments(ICodeWriter code, BaseInvokeNode insn, int startArgNum,
+	public void generateMethodArguments(ICodeWriter code, BaseInvokeNode insn, int startArgNum,
 			@Nullable MethodNode mthNode) throws CodegenException {
 		int k = startArgNum;
 		if (mthNode != null && mthNode.contains(AFlag.SKIP_FIRST_ARG)) {

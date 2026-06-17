@@ -13,7 +13,7 @@ import jadx.api.ICodeWriter;
 import jadx.api.plugins.input.data.AccessFlags;
 import jadx.api.plugins.input.data.annotations.EncodedType;
 import jadx.api.plugins.input.data.annotations.EncodedValue;
-import jadx.core.codegen.ClassGen;
+import jadx.core.codegen.api.IClassGen;
 import jadx.core.deobf.NameMapper;
 import jadx.core.dex.attributes.AFlag;
 import jadx.core.dex.info.AccessInfo;
@@ -62,7 +62,7 @@ public class AndroidResourcesUtils {
 		return rCls;
 	}
 
-	public static boolean handleAppResField(ICodeWriter code, ClassGen clsGen, ClassInfo declClass) {
+	public static boolean handleAppResField(ICodeWriter code, IClassGen clsGen, ClassInfo declClass) {
 		ClassInfo parentClass = declClass.getParentClass();
 		if (parentClass != null && parentClass.getShortName().equals("R")) {
 			clsGen.useClass(code, parentClass);

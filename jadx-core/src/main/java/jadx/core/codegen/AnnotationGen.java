@@ -15,6 +15,7 @@ import jadx.api.plugins.input.data.attributes.JadxAttrType;
 import jadx.api.plugins.input.data.attributes.types.AnnotationDefaultAttr;
 import jadx.api.plugins.input.data.attributes.types.AnnotationMethodParamsAttr;
 import jadx.api.plugins.input.data.attributes.types.AnnotationsAttr;
+import jadx.core.codegen.api.IClassGen;
 import jadx.core.dex.attributes.IAttributeNode;
 import jadx.core.dex.info.FieldInfo;
 import jadx.core.dex.instructions.args.ArgType;
@@ -28,9 +29,9 @@ import jadx.core.utils.exceptions.JadxRuntimeException;
 public class AnnotationGen {
 
 	private final ClassNode cls;
-	private final ClassGen classGen;
+	private final IClassGen classGen;
 
-	public AnnotationGen(ClassNode cls, ClassGen classGen) {
+	public AnnotationGen(ClassNode cls, IClassGen classGen) {
 		this.cls = cls;
 		this.classGen = classGen;
 	}

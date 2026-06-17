@@ -3,7 +3,7 @@ package jadx.core.codegen.kotlin;
 import org.jetbrains.annotations.Nullable;
 
 import jadx.api.ICodeWriter;
-import jadx.core.codegen.ClassGen;
+import jadx.core.codegen.api.IClassGen;
 import jadx.core.dex.instructions.args.ArgType;
 import jadx.core.dex.instructions.args.PrimitiveType;
 import jadx.core.dex.nodes.ClassNode;
@@ -17,7 +17,7 @@ public final class KotlinTypeGen {
 		return type == ArgType.VOID || type.equals(ArgType.VOID);
 	}
 
-	public static void useType(ClassGen classGen, ICodeWriter code, ArgType type) {
+	public static void useType(IClassGen classGen, ICodeWriter code, ArgType type) {
 		PrimitiveType stype = type.getPrimitiveType();
 		if (stype == null) {
 			code.add(type.toString());
@@ -78,7 +78,7 @@ public final class KotlinTypeGen {
 		return name == null ? null : name + "Array";
 	}
 
-	public static void useClassLiteral(ClassGen classGen, ICodeWriter code, ArgType clsType) {
+	public static void useClassLiteral(IClassGen classGen, ICodeWriter code, ArgType clsType) {
 		classGen.useType(code, clsType);
 		code.add("::class.java");
 	}
@@ -93,7 +93,7 @@ public final class KotlinTypeGen {
 		code.add("arrayOf");
 	}
 
-	public static void emitNewArray(ClassGen classGen, ICodeWriter code, ArgType arrayType, int explicitDims) {
+	public static void emitNewArray(IClassGen classGen, ICodeWriter code, ArgType arrayType, int explicitDims) {
 		String primitiveArray = kotlinPrimitiveArrayType(ArgType.array(arrayType.getArrayRootElement(), explicitDims));
 		if (primitiveArray != null && explicitDims == arrayType.getArrayDimension()) {
 			code.add(primitiveArray).add('(');

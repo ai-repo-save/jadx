@@ -15,8 +15,10 @@ import jadx.api.ICodeWriter;
 import jadx.api.JavaMethod;
 import jadx.api.impl.SimpleCodeWriter;
 import jadx.api.plugins.input.data.IMethodRef;
-import jadx.core.codegen.MethodGen;
+import jadx.core.codegen.common.MethodGenBase;
 import jadx.core.dex.attributes.AFlag;
+
+import static jadx.core.codegen.common.MethodGenBase.FallbackOption.BLOCK_DUMP;
 import jadx.core.dex.attributes.AType;
 import jadx.core.dex.attributes.IAttributeNode;
 import jadx.core.dex.info.ClassInfo;
@@ -38,8 +40,6 @@ import jadx.core.dex.regions.loops.LoopRegion;
 import jadx.core.dex.trycatch.ExceptionHandler;
 import jadx.core.dex.visitors.SaveCode;
 import jadx.core.utils.files.FileUtils;
-
-import static jadx.core.codegen.MethodGen.FallbackOption.BLOCK_DUMP;
 
 public class DotGraphUtils {
 	private static final String NL = "\\l";
@@ -418,7 +418,7 @@ public class DotGraphUtils {
 		} else {
 			ICodeWriter code = new SimpleCodeWriter();
 			List<InsnNode> instructions = block.getInstructions();
-			MethodGen.addFallbackInsns(code, mth, instructions.toArray(new InsnNode[0]), BLOCK_DUMP);
+			MethodGenBase.addFallbackInsns(code, mth, instructions.toArray(new InsnNode[0]), BLOCK_DUMP);
 			// For some reason, instructions here get put through an additional step of unescaping
 			String str = escape(code.newLine().toString());
 			if (str.startsWith(NL)) {

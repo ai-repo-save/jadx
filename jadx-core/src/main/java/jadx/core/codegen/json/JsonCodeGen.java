@@ -17,8 +17,9 @@ import jadx.api.impl.AnnotatedCodeWriter;
 import jadx.api.impl.SimpleCodeWriter;
 import jadx.api.metadata.ICodeMetadata;
 import jadx.api.metadata.annotations.InsnCodeOffset;
-import jadx.core.codegen.ClassGen;
-import jadx.core.codegen.MethodGen;
+import jadx.core.codegen.api.IClassGen;
+import jadx.core.codegen.api.IMethodGen;
+import jadx.core.codegen.common.CodeGenFactory;
 import jadx.core.codegen.json.cls.JsonClass;
 import jadx.core.codegen.json.cls.JsonCodeLine;
 import jadx.core.codegen.json.cls.JsonField;
@@ -57,12 +58,12 @@ public class JsonCodeGen {
 		return GSON.toJson(jsonCls);
 	}
 
-	private JsonClass processCls(ClassNode cls, @Nullable ClassGen parentCodeGen) {
-		ClassGen classGen;
+	private JsonClass processCls(ClassNode cls, @Nullable IClassGen parentCodeGen) {
+		IClassGen classGen;
 		if (parentCodeGen == null) {
-			classGen = new ClassGen(cls, args);
+			classGen = CodeGenFactory.createClassGen(cls, args);
 		} else {
-			classGen = new ClassGen(cls, parentCodeGen);
+			classGen = CodeGenFactory.createClassGen(cls, parentCodeGen);
 		}
 		ClassInfo classInfo = cls.getClassInfo();
 
@@ -102,7 +103,7 @@ public class JsonCodeGen {
 		return jsonCls;
 	}
 
-	private void addInnerClasses(ClassNode cls, JsonClass jsonCls, ClassGen classGen) {
+	private void addInnerClasses(ClassNode cls, JsonClass jsonCls, IClassGen classGen) {
 		List<ClassNode> innerClasses = cls.getInnerClasses();
 		if (innerClasses.isEmpty()) {
 			return;
@@ -117,7 +118,7 @@ public class JsonCodeGen {
 		}
 	}
 
-	private void addFields(ClassNode cls, JsonClass jsonCls, ClassGen classGen) {
+	private void addFields(ClassNode cls, JsonClass jsonCls, IClassGen classGen) {
 		jsonCls.setFields(new ArrayList<>());
 		for (FieldNode field : cls.getFields()) {
 			if (field.contains(AFlag.DONT_GENERATE)) {
@@ -137,7 +138,7 @@ public class JsonCodeGen {
 		}
 	}
 
-	private void addMethods(ClassNode cls, JsonClass jsonCls, ClassGen classGen) {
+	private void addMethods(ClassNode cls, JsonClass jsonCls, IClassGen classGen) {
 		jsonCls.setMethods(new ArrayList<>());
 		for (MethodNode mth : cls.getMethods()) {
 			if (mth.contains(AFlag.DONT_GENERATE)) {
@@ -152,7 +153,7 @@ public class JsonCodeGen {
 			jsonMth.setReturnType(getTypeAlias(classGen, mth.getReturnType()));
 			jsonMth.setArguments(Utils.collectionMap(mth.getMethodInfo().getArgumentsTypes(), clsType -> getTypeAlias(classGen, clsType)));
 
-			MethodGen mthGen = new MethodGen(classGen, mth);
+			IMethodGen mthGen = CodeGenFactory.createMethodGen(classGen, mth);
 			ICodeWriter cw = new AnnotatedCodeWriter(args);
 			mthGen.addDefinition(cw);
 			jsonMth.setDeclaration(cw.getCodeStr());
@@ -163,7 +164,7 @@ public class JsonCodeGen {
 		}
 	}
 
-	private List<JsonCodeLine> fillMthCode(MethodNode mth, MethodGen mthGen) {
+	private List<JsonCodeLine> fillMthCode(MethodNode mth, IMethodGen mthGen) {
 		if (mth.isNoCode()) {
 			return Collections.emptyList();
 		}
@@ -206,7 +207,7 @@ public class JsonCodeGen {
 		return codeLines;
 	}
 
-	private String getTypeAlias(ClassGen classGen, ArgType clsType) {
+	private String getTypeAlias(IClassGen classGen, ArgType clsType) {
 		ICodeWriter code = new SimpleCodeWriter(args);
 		classGen.useType(code, clsType);
 		return code.getCodeStr();
