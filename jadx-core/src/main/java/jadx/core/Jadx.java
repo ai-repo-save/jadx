@@ -60,6 +60,7 @@ import jadx.core.dex.visitors.debuginfo.DebugInfoAttachVisitor;
 import jadx.core.dex.visitors.finaly.MarkFinallyVisitor;
 import jadx.core.dex.visitors.fixaccessmodifiers.FixAccessModifiers;
 import jadx.core.dex.visitors.gradle.NonFinalResIdsVisitor;
+import jadx.core.dex.visitors.kotlin.KotlinDefaultArgsVisitor;
 import jadx.core.dex.visitors.kotlin.KotlinPropertyVisitor;
 import jadx.core.dex.visitors.kotlin.ProcessKotlinInternals;
 import jadx.core.dex.visitors.prepare.AddAndroidConstants;
@@ -205,6 +206,7 @@ public class Jadx {
 		passes.add(new NonFinalResIdsVisitor());
 		passes.add(new ExtractFieldInit());
 		passes.add(new KotlinPropertyVisitor());
+		passes.add(new KotlinDefaultArgsVisitor());
 		passes.add(new FixAccessModifiers());
 		passes.add(new ClassModifier());
 		passes.add(new LoopRegionVisitor());
