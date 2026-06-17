@@ -14,6 +14,8 @@ class KotlinMetadataOptions : BasePluginOptionsBuilder() {
 		private set
 	var isDataClass: Boolean = true
 		private set
+	var isObjectClass: Boolean = true
+		private set
 	var isToString: Boolean = true
 		private set
 	var isGetters: Boolean = true
@@ -45,6 +47,11 @@ class KotlinMetadataOptions : BasePluginOptionsBuilder() {
 			.defaultValue(true)
 			.setter { isDataClass = it }
 
+		boolOption(OBJECT_CLASS_OPT)
+			.description("add object declaration modifier")
+			.defaultValue(true)
+			.setter { isObjectClass = it }
+
 		boolOption(TO_STRING_OPT)
 			.description("rename fields using toString")
 			.defaultValue(true)
@@ -58,7 +65,7 @@ class KotlinMetadataOptions : BasePluginOptionsBuilder() {
 
 	fun isPreparePassNeeded(): Boolean = isClassAlias
 
-	fun isDecompilePassNeeded(): Boolean = isMethodArgs || isFields || isCompanion || isDataClass || isToString || isGetters
+	fun isDecompilePassNeeded(): Boolean = isMethodArgs || isFields || isCompanion || isDataClass || isObjectClass || isToString || isGetters
 
 	companion object {
 		const val CLASS_ALIAS_OPT = "$PLUGIN_ID.class-alias"
@@ -66,6 +73,7 @@ class KotlinMetadataOptions : BasePluginOptionsBuilder() {
 		const val FIELDS_OPT = "$PLUGIN_ID.fields"
 		const val COMPANION_OPT = "$PLUGIN_ID.companion"
 		const val DATA_CLASS_OPT = "$PLUGIN_ID.data-class"
+		const val OBJECT_CLASS_OPT = "$PLUGIN_ID.object-class"
 		const val TO_STRING_OPT = "$PLUGIN_ID.to-string"
 		const val GETTERS_OPT = "$PLUGIN_ID.getters"
 	}

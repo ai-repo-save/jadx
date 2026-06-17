@@ -23,6 +23,7 @@ public class AccessFlags {
 	public static final int CONSTRUCTOR = 0x10000;
 	public static final int DECLARED_SYNCHRONIZED = 0x20000;
 	public static final int DATA = 0x40000;
+	public static final int OBJECT = 0x80000;
 
 	public static boolean hasFlag(int flags, int flagValue) {
 		return (flags & flagValue) != 0;

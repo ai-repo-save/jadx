@@ -168,6 +168,10 @@ public class AccessInfo {
 		return (accFlags & AccessFlags.DATA) != 0;
 	}
 
+	public boolean isObject() {
+		return (accFlags & AccessFlags.OBJECT) != 0;
+	}
+
 	public AFType getType() {
 		return type;
 	}
@@ -226,6 +230,9 @@ public class AccessInfo {
 				if (showHidden) {
 					if (isData()) {
 						code.append("/* data */ ");
+					}
+					if (isObject()) {
+						code.append("/* object */ ");
 					}
 					if (isModuleInfo()) {
 						code.append("/* module-info */ ");

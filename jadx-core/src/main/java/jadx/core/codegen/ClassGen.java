@@ -202,6 +202,7 @@ public class ClassGen {
 
 		annotationGen.addForClass(clsCode);
 		boolean isDataClass = af.isData();
+		boolean isKotlinObject = af.isObject();
 		af = lang.filterClassAccess(af);
 		clsCode.startLineWithNum(cls.getSourceLine()).add(af.makeString(cls.checkCommentsLevel(CommentsLevel.INFO)));
 		if (af.isInterface()) {
@@ -211,6 +212,8 @@ public class ClassGen {
 			clsCode.add("interface ");
 		} else if (af.isEnum()) {
 			clsCode.add(lang.enumClassKeyword());
+		} else if (isKotlinObject && lang.isKotlin()) {
+			clsCode.add("object ");
 		} else {
 			if (isDataClass && lang.isKotlin()) {
 				clsCode.add("data ");
@@ -338,6 +341,9 @@ public class ClassGen {
 	}
 
 	private void addKotlinCompanion(ICodeWriter clsCode) throws CodegenException {
+		if (isKotlinOutput() && cls.getAccessFlags().isObject()) {
+			return;
+		}
 		boolean hasStaticFields = cls.getFields().stream()
 				.anyMatch(f -> !skipNode(f) && f.getAccessFlags().isStatic());
 		boolean hasStaticMethods = cls.getMethods().stream()
