@@ -104,15 +104,19 @@ object KotlinMetadataUtils {
 			kmCls.functions.forEach { kmFunction ->
 				val node: MethodNode = cls.searchMethodByShortId(kmFunction.shortId) ?: return@forEach
 
-				val argCount = node.argTypes.size
-				val paramCount = kmFunction.valueParameters.size
-				if (argCount == paramCount) {
-					// requires arg registers to be loaded, is this necessary ?
-					val aliasList = node.argRegs.zip(kmFunction.valueParameters).map { (rArg, kmValueParameter) ->
-						MethodArgRename(rArg = rArg, alias = kmValueParameter.name)
-					}
-					put(node, aliasList)
+				val valueParams = kmFunction.valueParameters
+				if (valueParams.isEmpty()) {
+					return@forEach
 				}
+				val argRegs = node.argRegs
+				val continuationSkip = if (kmFunction.isSuspend && argRegs.size == valueParams.size + 1) 1 else 0
+				if (argRegs.size - continuationSkip != valueParams.size) {
+					return@forEach
+				}
+				val aliasList = argRegs.take(valueParams.size).zip(valueParams).map { (rArg, kmValueParameter) ->
+					MethodArgRename(rArg = rArg, alias = kmValueParameter.name)
+				}
+				put(node, aliasList)
 			}
 		}
 	}

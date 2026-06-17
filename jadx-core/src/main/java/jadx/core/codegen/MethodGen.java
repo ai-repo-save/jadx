@@ -28,6 +28,7 @@ import jadx.core.dex.attributes.nodes.DecompileModeOverrideAttr;
 import jadx.core.dex.attributes.nodes.JadxError;
 import jadx.core.dex.attributes.nodes.JumpInfo;
 import jadx.core.dex.attributes.nodes.MethodReplaceAttr;
+import jadx.core.dex.attributes.nodes.MethodDefaultParamsAttr;
 import jadx.core.dex.attributes.nodes.SkipMethodArgsAttr;
 import jadx.core.dex.attributes.nodes.SuspendFunctionAttr;
 import jadx.core.dex.info.AccessInfo;
@@ -302,6 +303,19 @@ public class MethodGen {
 				}
 			} else {
 				classGen.useType(code, argType);
+			}
+			MethodDefaultParamsAttr defaultParams = mth.get(AType.METHOD_DEFAULT_PARAMS);
+			if (defaultParams != null) {
+				MethodDefaultParamsAttr.DefaultValue defaultValue = defaultParams.getDefault(argNum);
+				if (defaultValue != null) {
+					code.add(" = ");
+					try {
+						InsnGen insnGen = new InsnGen(new MethodGen(classGen, defaultValue.getSourceMth()), false);
+						insnGen.makeInsn(defaultValue.getValueInsn(), code);
+					} catch (CodegenException e) {
+						code.add("/* default */");
+					}
+				}
 			}
 		}
 	}
