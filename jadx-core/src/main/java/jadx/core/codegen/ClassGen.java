@@ -34,6 +34,7 @@ import jadx.core.dex.attributes.AType;
 import jadx.core.dex.attributes.FieldInitInsnAttr;
 import jadx.core.dex.attributes.nodes.EnumClassAttr;
 import jadx.core.dex.attributes.nodes.EnumClassAttr.EnumField;
+import jadx.core.dex.attributes.nodes.KotlinFieldFlagsAttr;
 import jadx.core.dex.attributes.nodes.LineAttrNode;
 import jadx.core.dex.attributes.nodes.MethodInlineAttr;
 import jadx.core.dex.attributes.nodes.NotificationAttrNode;
@@ -540,6 +541,14 @@ public class ClassGen {
 		AccessInfo fieldAccess = lang.filterFieldAccess(f.getAccessFlags(), kotlinCompanionGen);
 		code.startLine(fieldAccess.makeString(f.checkCommentsLevel(CommentsLevel.INFO)));
 		lang.emitFieldTypeAndName(this, code, f, f.getAccessFlags().isFinal());
+
+		KotlinFieldFlagsAttr kotlinFlags = f.get(AType.KOTLIN_FIELD_FLAGS);
+		if (kotlinFlags != null && kotlinFlags.isLazyDelegate() && isKotlinOutput()) {
+			if (lang.fieldNeedsSemicolon()) {
+				code.add(';');
+			}
+			return;
+		}
 
 		FieldInitInsnAttr initInsnAttr = f.get(AType.FIELD_INIT_INSN);
 		if (initInsnAttr != null) {

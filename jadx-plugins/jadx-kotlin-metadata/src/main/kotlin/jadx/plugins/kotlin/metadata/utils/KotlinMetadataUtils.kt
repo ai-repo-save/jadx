@@ -4,15 +4,21 @@ import jadx.core.deobf.NameMapper
 import jadx.core.dex.attributes.nodes.RenameReasonAttr
 import jadx.core.dex.instructions.args.ArgType
 import jadx.core.dex.nodes.ClassNode
+import jadx.core.dex.nodes.FieldNode
 import jadx.core.dex.nodes.MethodNode
 import jadx.core.utils.Utils
 import jadx.plugins.kotlin.metadata.model.ClassAliasRename
 import jadx.plugins.kotlin.metadata.model.CompanionRename
 import jadx.plugins.kotlin.metadata.model.FieldRename
 import jadx.plugins.kotlin.metadata.model.MethodArgRename
+import jadx.plugins.kotlin.metadata.model.PropertyFlagsInfo
 import jadx.plugins.kotlin.metadata.model.SuspendMethodInfo
 import kotlin.metadata.KmClass
+import kotlin.metadata.KmProperty
+import kotlin.metadata.isDelegated
+import kotlin.metadata.isLateinit
 import kotlin.metadata.isSuspend
+import kotlin.metadata.jvm.Metadata
 
 object KotlinMetadataUtils {
 
@@ -131,6 +137,36 @@ object KotlinMetadataUtils {
 			val contIdx = argTypes.size - 1
 			SuspendMethodInfo(node, contIdx, argTypes[contIdx])
 		}
+	}
+
+	fun mapPropertyFlags(cls: ClassNode, kmCls: KmClass): List<PropertyFlagsInfo> {
+		return kmCls.properties.mapNotNull { kmProperty ->
+			val field = cls.searchFieldByShortId(kmProperty.shortId) ?: return@mapNotNull null
+			val isLateinit = kmProperty.isLateinit
+			val isLazy = kmProperty.isDelegated && isKotlinLazyDelegateType(cls, field)
+			if (!isLateinit && !isLazy) {
+				return@mapNotNull null
+			}
+			PropertyFlagsInfo(field, isLateinit, isLazy)
+		}
+	}
+
+	private fun isKotlinLazyDelegateType(cls: ClassNode, field: FieldNode): Boolean {
+		val typeCls = cls.root().resolveClass(field.type) ?: return false
+		return implementsKotlinLazy(typeCls)
+	}
+
+	private fun implementsKotlinLazy(cls: ClassNode): Boolean {
+		if (cls.classInfo.fullName == "kotlin.Lazy") {
+			return true
+		}
+		for (iface in cls.interfaces) {
+			if (iface.isObject && iface.`object` == "kotlin.Lazy") {
+				return true
+			}
+		}
+		val parent = cls.root().resolveClass(cls.superClass) ?: return false
+		return implementsKotlinLazy(parent)
 	}
 
 	fun mapCompanion(cls: ClassNode, kmCls: KmClass): CompanionRename? {
