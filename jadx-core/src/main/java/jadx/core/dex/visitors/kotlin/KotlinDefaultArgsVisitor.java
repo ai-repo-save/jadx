@@ -617,7 +617,7 @@ public class KotlinDefaultArgsVisitor extends AbstractVisitor {
 						resolved = resolveRegisterValue(mth, blockInsns, ifInsnIdx, src);
 					}
 					if (resolved != null) {
-						return insn;
+						return resolved;
 					}
 				}
 				return null;
