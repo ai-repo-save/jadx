@@ -18,6 +18,8 @@ import jadx.core.dex.instructions.args.CodeVar;
 import jadx.core.dex.instructions.args.InsnArg;
 import jadx.core.dex.instructions.args.PrimitiveType;
 import jadx.core.dex.nodes.ClassNode;
+import jadx.core.dex.attributes.AType;
+import jadx.core.dex.attributes.nodes.KotlinFieldFlagsAttr;
 import jadx.core.dex.nodes.FieldNode;
 import jadx.core.dex.nodes.InsnNode;
 import jadx.core.dex.nodes.MethodNode;
@@ -134,6 +136,22 @@ class KotlinCodeLanguage implements CodeLanguage {
 
 	@Override
 	public void emitFieldTypeAndName(ClassGen classGen, ICodeWriter code, FieldNode field, boolean isFinal) {
+		KotlinFieldFlagsAttr flags = field.get(AType.KOTLIN_FIELD_FLAGS);
+		if (flags != null && flags.isLateinit()) {
+			code.add("lateinit var ");
+			code.attachDefinition(field);
+			code.add(field.getAlias());
+			code.add(": ");
+			useType(classGen, code, field.getType());
+			return;
+		}
+		if (flags != null && flags.isLazyDelegate()) {
+			code.add("val ");
+			code.attachDefinition(field);
+			code.add(field.getAlias());
+			code.add(" by lazy");
+			return;
+		}
 		code.add(isFinal ? "val " : "var ");
 		code.attachDefinition(field);
 		code.add(field.getAlias());

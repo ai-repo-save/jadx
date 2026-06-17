@@ -7,11 +7,11 @@ import jadx.api.plugins.pass.types.JadxDecompilePass
 import jadx.core.deobf.NameMapper
 import jadx.core.dex.attributes.AFlag
 import jadx.core.dex.attributes.AType
+import jadx.core.dex.attributes.nodes.KotlinFieldFlagsAttr
 import jadx.core.dex.attributes.nodes.RenameReasonAttr
 import jadx.core.dex.attributes.nodes.SuspendFunctionAttr
 import jadx.core.dex.attributes.nodes.SuspendFunctionAttr.Source
 import jadx.core.dex.attributes.nodes.SkipMethodArgsAttr
-import jadx.core.dex.instructions.args.ArgType
 import jadx.core.dex.nodes.ClassNode
 import jadx.core.dex.nodes.MethodNode
 import jadx.core.dex.nodes.RootNode
@@ -42,6 +42,7 @@ class KotlinMetadataDecompilePass(
 		if (options.isDataClass) fixDataClass(wrapper)
 		if (options.isObjectClass) fixObjectClass(wrapper)
 		if (options.isSuspendFun) fixSuspendFunctions(wrapper)
+		if (options.isPropertyFlags) fixPropertyFlags(wrapper)
 		if (options.isToString) renameToString(wrapper)
 		if (options.isGetters) renameGetters(wrapper)
 
@@ -104,6 +105,18 @@ class KotlinMetadataDecompilePass(
 						remove(AccessFlags.DATA)
 					}
 				}
+			}
+		}
+	}
+
+	private fun fixPropertyFlags(wrapper: KmClassWrapper) {
+		wrapper.getPropertyFlags().forEach { (field, isLateinit, isLazy) ->
+			val flags = KotlinFieldFlagsAttr.getOrCreate(field)
+			if (isLateinit) {
+				flags.setLateinit(true)
+			}
+			if (isLazy) {
+				flags.setLazyDelegate(true)
 			}
 		}
 	}
