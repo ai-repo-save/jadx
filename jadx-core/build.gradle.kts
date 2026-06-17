@@ -17,6 +17,7 @@ dependencies {
 	testImplementation(project(":jadx-plugins:jadx-java-convert"))
 	testImplementation(project(":jadx-plugins:jadx-java-input"))
 	testImplementation(project(":jadx-plugins:jadx-raung-input"))
+	testRuntimeOnly(project(":jadx-plugins:jadx-kotlin-metadata"))
 
 	testImplementation("org.eclipse.jdt:ecj") {
 		version {
