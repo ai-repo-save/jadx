@@ -301,7 +301,7 @@ public class InsnGen {
 					}
 				}
 				RegisterArg resArg = insn.getResult();
-				if (resArg != null) {
+				if (resArg != null && flag != Flags.INLINE) {
 					SSAVar var = resArg.getSVar();
 					if (var == null || var.getUseCount() != 0 || insn.getType() != InsnType.CONSTRUCTOR) {
 						assignVar(code, insn);

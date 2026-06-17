@@ -63,7 +63,8 @@ public class TestSimpleShortcutKotlinSugar extends SmaliKotlinTest {
 	public void defaultParameterInInterface() {
 		assertThat(load("data.ShortcutDao"))
 				.code()
-				.containsPattern("incrementTapCount\\([^)]*now: Long = ");
+				.contains("now: Long = System.currentTimeMillis()")
+				.doesNotContain("now: Long = j =");
 	}
 
 	@Test
