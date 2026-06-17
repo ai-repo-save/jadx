@@ -2,7 +2,9 @@ package jadx.plugins.kotlin.metadata.utils
 
 import jadx.core.dex.nodes.ClassNode
 import kotlin.metadata.KmClass
+import kotlin.metadata.ClassKind
 import kotlin.metadata.isData
+import kotlin.metadata.kind
 import kotlin.metadata.jvm.KotlinClassMetadata
 
 // don't expose kotlinx.metadata.* types ?
@@ -18,6 +20,8 @@ class KmClassWrapper private constructor(
 	fun getCompanion() = KotlinMetadataUtils.mapCompanion(cls, kmCls)
 
 	fun isDataClass() = kmCls.isData
+
+	fun isObjectClass() = kmCls.kind == ClassKind.OBJECT
 
 	// does not require metadata, may be useful for plain java ?
 	fun parseToString() = KotlinUtils.parseToString(cls)

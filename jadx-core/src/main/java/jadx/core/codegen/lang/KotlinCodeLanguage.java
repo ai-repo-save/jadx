@@ -74,6 +74,9 @@ class KotlinCodeLanguage implements CodeLanguage {
 		if (access.isData()) {
 			filtered = filtered.remove(AccessFlags.DATA);
 		}
+		if (access.isObject()) {
+			filtered = filtered.remove(AccessFlags.OBJECT);
+		}
 		return filtered;
 	}
 

@@ -35,6 +35,7 @@ class KotlinMetadataDecompilePass(
 		if (options.isFields) renameFields(wrapper)
 		if (options.isCompanion) renameCompanion(wrapper)
 		if (options.isDataClass) fixDataClass(wrapper)
+		if (options.isObjectClass) fixObjectClass(wrapper)
 		if (options.isToString) renameToString(wrapper)
 		if (options.isGetters) renameGetters(wrapper)
 
@@ -97,6 +98,31 @@ class KotlinMetadataDecompilePass(
 						remove(AccessFlags.DATA)
 					}
 				}
+			}
+		}
+	}
+
+	private fun fixObjectClass(wrapper: KmClassWrapper) {
+		if (!wrapper.isObjectClass()) {
+			return
+		}
+		val cls = wrapper.cls
+		if (!cls.accessFlags.isObject) {
+			cls.accessFlags = cls.accessFlags.add(AccessFlags.OBJECT)
+		}
+		val rawName = cls.classInfo.makeRawFullName()
+		cls.fields.forEach { field ->
+			if (field.accessFlags.isStatic
+				&& field.accessFlags.isFinal
+				&& field.type.isObject
+				&& field.type.`object` == rawName
+			) {
+				field.add(AFlag.DONT_GENERATE)
+			}
+		}
+		cls.methods.forEach { mth ->
+			if (mth.methodInfo.isClassInit || (mth.isConstructor && mth.accessFlags.isPrivate)) {
+				mth.add(AFlag.DONT_GENERATE)
 			}
 		}
 	}
