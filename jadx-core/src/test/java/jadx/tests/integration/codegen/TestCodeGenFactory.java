@@ -14,7 +14,6 @@ import jadx.core.codegen.api.IClassGen;
 import jadx.core.codegen.api.IMethodGen;
 import jadx.core.codegen.common.CodeGenFactory;
 import jadx.core.codegen.common.MethodGenBase;
-import jadx.api.JavaClass;
 import jadx.core.dex.attributes.AFlag;
 import jadx.core.dex.nodes.ClassNode;
 import jadx.core.dex.nodes.MethodNode;
