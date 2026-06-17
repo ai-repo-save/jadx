@@ -2,6 +2,7 @@ package jadx.plugins.kotlin.metadata.utils
 
 import jadx.core.deobf.NameMapper
 import jadx.core.dex.attributes.nodes.RenameReasonAttr
+import jadx.core.dex.instructions.args.ArgType
 import jadx.core.dex.nodes.ClassNode
 import jadx.core.dex.nodes.MethodNode
 import jadx.core.utils.Utils
@@ -9,7 +10,9 @@ import jadx.plugins.kotlin.metadata.model.ClassAliasRename
 import jadx.plugins.kotlin.metadata.model.CompanionRename
 import jadx.plugins.kotlin.metadata.model.FieldRename
 import jadx.plugins.kotlin.metadata.model.MethodArgRename
+import jadx.plugins.kotlin.metadata.model.SuspendMethodInfo
 import kotlin.metadata.KmClass
+import kotlin.metadata.isSuspend
 
 object KotlinMetadataUtils {
 
@@ -112,6 +115,21 @@ object KotlinMetadataUtils {
 		return kmCls.properties.mapNotNull { kmProperty ->
 			val node = cls.searchFieldByShortId(kmProperty.shortId) ?: return@mapNotNull null
 			FieldRename(field = node, alias = kmProperty.name)
+		}
+	}
+
+	fun mapSuspendMethods(cls: ClassNode, kmCls: KmClass): List<SuspendMethodInfo> {
+		return kmCls.functions.mapNotNull { kmFunction ->
+			if (!kmFunction.isSuspend) {
+				return@mapNotNull null
+			}
+			val node = cls.searchMethodByShortId(kmFunction.shortId) ?: return@mapNotNull null
+			val argTypes = node.argTypes
+			if (argTypes.isEmpty()) {
+				return@mapNotNull null
+			}
+			val contIdx = argTypes.size - 1
+			SuspendMethodInfo(node, contIdx, argTypes[contIdx])
 		}
 	}
 

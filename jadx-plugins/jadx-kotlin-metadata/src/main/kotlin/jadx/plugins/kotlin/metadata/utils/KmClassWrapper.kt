@@ -23,6 +23,8 @@ class KmClassWrapper private constructor(
 
 	fun isObjectClass() = kmCls.kind == ClassKind.OBJECT
 
+	fun getSuspendMethods() = KotlinMetadataUtils.mapSuspendMethods(cls, kmCls)
+
 	// does not require metadata, may be useful for plain java ?
 	fun parseToString() = KotlinUtils.parseToString(cls)
 

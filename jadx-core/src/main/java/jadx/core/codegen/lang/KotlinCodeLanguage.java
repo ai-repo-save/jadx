@@ -271,7 +271,14 @@ class KotlinCodeLanguage implements CodeLanguage {
 
 	@Override
 	public String getMethodModifierPrefix(MethodNode mth) {
-		return isMethodOverride(mth) ? "override " : "";
+		StringBuilder prefix = new StringBuilder();
+		if (mth.contains(AType.SUSPEND_FUNCTION)) {
+			prefix.append("suspend ");
+		}
+		if (isMethodOverride(mth)) {
+			prefix.append("override ");
+		}
+		return prefix.toString();
 	}
 
 	private boolean isMethodOverride(MethodNode mth) {
