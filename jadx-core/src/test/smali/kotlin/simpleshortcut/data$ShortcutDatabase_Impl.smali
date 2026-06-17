@@ -208,7 +208,7 @@
             "Ljava/lang/Object;",
             ">;)",
             "Ljava/util/List<",
-            "Lg1/a;",
+            "Landroidx/room/migration/Migration;",
             ">;"
         }
     .end annotation

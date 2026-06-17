@@ -1,5 +1,5 @@
 .class public final Lcom/josski/simpleshortcut/data/ShortcutDatabase$Companion$MIGRATION_1_2$1;
-.super Lg1/a;
+.super Landroidx/room/migration/Migration;
 .source "SourceFile"
 
 
@@ -19,7 +19,7 @@
     }
     d2 = {
         "com/josski/simpleshortcut/data/ShortcutDatabase$Companion$MIGRATION_1_2$1",
-        "Lg1/a;",
+        "Landroidx/room/migration/Migration;",
         "Lj1/b;",
         "db",
         "Lw2/i;",
@@ -44,7 +44,7 @@
 
     const/4 v1, 0x2
 
-    invoke-direct {p0, v0, v1}, Lg1/a;-><init>(II)V
+    invoke-direct {p0, v0, v1}, Landroidx/room/migration/Migration;-><init>(II)V
 
     return-void
 .end method
