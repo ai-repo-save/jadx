@@ -5,9 +5,9 @@ import java.util.Iterator;
 import jadx.api.ICodeWriter;
 import jadx.core.Consts;
 import jadx.core.codegen.AnnotationGen;
-import jadx.core.codegen.ClassGen;
 import jadx.core.codegen.InsnGen;
-import jadx.core.codegen.MethodGen;
+import jadx.core.codegen.api.IClassGen;
+import jadx.core.codegen.api.IMethodGen;
 import jadx.core.dex.attributes.AType;
 import jadx.core.dex.attributes.nodes.MethodOverrideAttr;
 import jadx.core.dex.info.AccessInfo;
@@ -52,11 +52,6 @@ class JavaCodeLanguage implements CodeLanguage {
 	}
 
 	@Override
-	public boolean usesKotlinClassBody() {
-		return false;
-	}
-
-	@Override
 	public boolean methodNeedsSemicolon() {
 		return true;
 	}
@@ -82,7 +77,7 @@ class JavaCodeLanguage implements CodeLanguage {
 	}
 
 	@Override
-	public void addSupertypes(ClassGen classGen, ICodeWriter code, AccessInfo af, ArgType sup, ClassNode cls) {
+	public void addSupertypes(IClassGen classGen, ICodeWriter code, AccessInfo af, ArgType sup, ClassNode cls) {
 		if (sup != null
 				&& !sup.equals(ArgType.OBJECT)
 				&& !cls.contains(jadx.core.dex.attributes.AFlag.REMOVE_SUPER_CLASS)) {
@@ -111,7 +106,7 @@ class JavaCodeLanguage implements CodeLanguage {
 	}
 
 	@Override
-	public void emitFieldTypeAndName(ClassGen classGen, ICodeWriter code, FieldNode field, boolean isFinal) {
+	public void emitFieldTypeAndName(IClassGen classGen, ICodeWriter code, FieldNode field, boolean isFinal) {
 		classGen.useType(code, field.getType());
 		code.add(' ');
 		code.attachDefinition(field);
@@ -119,7 +114,7 @@ class JavaCodeLanguage implements CodeLanguage {
 	}
 
 	@Override
-	public void useType(ClassGen classGen, ICodeWriter code, ArgType type) {
+	public void useType(IClassGen classGen, ICodeWriter code, ArgType type) {
 		PrimitiveType stype = type.getPrimitiveType();
 		if (stype == null) {
 			code.add(type.toString());
@@ -135,11 +130,6 @@ class JavaCodeLanguage implements CodeLanguage {
 		} else {
 			code.add(stype.getLongName());
 		}
-	}
-
-	@Override
-	public boolean addMethodDefinition(MethodGen methodGen, ICodeWriter code) {
-		return methodGen.addJavaDefinition(code);
 	}
 
 	@Override
@@ -233,7 +223,7 @@ class JavaCodeLanguage implements CodeLanguage {
 	}
 
 	@Override
-	public void emitConstructorNew(ClassGen classGen, ICodeWriter code) {
+	public void emitConstructorNew(IClassGen classGen, ICodeWriter code) {
 		code.add("new ");
 	}
 
@@ -248,7 +238,7 @@ class JavaCodeLanguage implements CodeLanguage {
 	}
 
 	@Override
-	public void addOverride(MethodGen methodGen, ICodeWriter code, MethodNode mth) {
+	public void addOverride(IMethodGen methodGen, ICodeWriter code, MethodNode mth) {
 		MethodOverrideAttr overrideAttr = mth.get(AType.METHOD_OVERRIDE);
 		if (overrideAttr == null) {
 			return;

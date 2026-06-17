@@ -5,6 +5,7 @@ import java.util.concurrent.Callable;
 import jadx.api.ICodeInfo;
 import jadx.api.JadxArgs;
 import jadx.api.impl.SimpleCodeInfo;
+import jadx.core.codegen.common.CodeGenFactory;
 import jadx.core.codegen.json.JsonCodeGen;
 import jadx.core.dex.attributes.AFlag;
 import jadx.core.dex.nodes.ClassNode;
@@ -31,8 +32,7 @@ public class CodeGen {
 	}
 
 	private static ICodeInfo generateJavaCode(ClassNode cls, JadxArgs args) {
-		ClassGen clsGen = new ClassGen(cls, args);
-		return wrapCodeGen(cls, clsGen::makeClass);
+		return wrapCodeGen(cls, () -> CodeGenFactory.createClassGen(cls, args).makeClass());
 	}
 
 	private static ICodeInfo generateJson(ClassNode cls) {

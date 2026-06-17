@@ -10,7 +10,8 @@ import jadx.api.ICodeWriter;
 import jadx.api.impl.SimpleCodeWriter;
 import jadx.core.Consts;
 import jadx.core.codegen.InsnGen;
-import jadx.core.codegen.MethodGen;
+import jadx.core.codegen.api.IMethodGen;
+import jadx.core.codegen.common.MethodGenBase;
 import jadx.core.dex.attributes.AFlag;
 import jadx.core.dex.attributes.AType;
 import jadx.core.dex.nodes.BlockNode;
@@ -92,7 +93,7 @@ public class CheckRegions extends AbstractVisitor {
 		ICodeWriter code = new SimpleCodeWriter();
 		code.incIndent();
 		code.newLine();
-		MethodGen mg = MethodGen.getFallbackMethodGen(mth);
+		IMethodGen mg = MethodGenBase.getFallbackMethodGen(mth);
 		InsnGen ig = new InsnGen(mg, true);
 		for (InsnNode insn : block.getInstructions()) {
 			try {

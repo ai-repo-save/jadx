@@ -3,9 +3,9 @@ package jadx.core.codegen.lang;
 import jadx.api.ICodeWriter;
 import jadx.api.plugins.input.data.AccessFlags;
 import jadx.core.codegen.AnnotationGen;
-import jadx.core.codegen.ClassGen;
 import jadx.core.codegen.InsnGen;
-import jadx.core.codegen.MethodGen;
+import jadx.core.codegen.api.IClassGen;
+import jadx.core.codegen.api.IMethodGen;
 import jadx.core.dex.info.AccessInfo;
 import jadx.core.dex.instructions.NewArrayNode;
 import jadx.core.dex.instructions.args.ArgType;
@@ -32,8 +32,6 @@ public interface CodeLanguage {
 
 	String genericExtendsKeyword();
 
-	boolean usesKotlinClassBody();
-
 	boolean methodNeedsSemicolon();
 
 	boolean fieldNeedsSemicolon();
@@ -44,13 +42,11 @@ public interface CodeLanguage {
 
 	AccessInfo filterMethodAccess(AccessInfo access, boolean inCompanion, AccessInfo clsAccess);
 
-	void addSupertypes(ClassGen classGen, ICodeWriter code, AccessInfo af, ArgType superClass, ClassNode cls);
+	void addSupertypes(IClassGen classGen, ICodeWriter code, AccessInfo af, ArgType superClass, ClassNode cls);
 
-	void emitFieldTypeAndName(ClassGen classGen, ICodeWriter code, FieldNode field, boolean isFinal);
+	void emitFieldTypeAndName(IClassGen classGen, ICodeWriter code, FieldNode field, boolean isFinal);
 
-	void useType(ClassGen classGen, ICodeWriter code, ArgType type);
-
-	boolean addMethodDefinition(MethodGen methodGen, ICodeWriter code);
+	void useType(IClassGen classGen, ICodeWriter code, ArgType type);
 
 	void declareVar(InsnGen insnGen, ICodeWriter code, CodeVar codeVar);
 
@@ -66,13 +62,13 @@ public interface CodeLanguage {
 
 	String arrayLengthProperty();
 
-	void emitConstructorNew(ClassGen classGen, ICodeWriter code);
+	void emitConstructorNew(IClassGen classGen, ICodeWriter code);
 
 	void emitAnonymousClassPrefix(ICodeWriter code);
 
 	boolean shouldSkipAnnotation(String annotationClass);
 
-	void addOverride(MethodGen methodGen, ICodeWriter code, MethodNode mth);
+	void addOverride(IMethodGen methodGen, ICodeWriter code, MethodNode mth);
 
 	String getMethodModifierPrefix(MethodNode mth);
 

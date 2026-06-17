@@ -1,4 +1,4 @@
-package jadx.core.codegen;
+package jadx.core.codegen.common;
 
 import java.util.List;
 
@@ -19,7 +19,13 @@ import jadx.api.plugins.input.data.attributes.JadxAttrType;
 import jadx.api.plugins.input.data.attributes.types.AnnotationMethodParamsAttr;
 import jadx.core.Consts;
 import jadx.core.Jadx;
-import jadx.core.codegen.kotlin.KotlinTypeGen;
+import jadx.core.codegen.AnnotationGen;
+import jadx.core.codegen.InsnGen;
+import jadx.core.codegen.NameGen;
+import jadx.core.codegen.RegionGen;
+import jadx.core.codegen.SimpleModeHelper;
+import jadx.core.codegen.api.IClassGen;
+import jadx.core.codegen.api.IMethodGen;
 import jadx.core.codegen.lang.CodeLanguage;
 import jadx.core.codegen.utils.CodeGenUtils;
 import jadx.core.dex.attributes.AFlag;
@@ -52,26 +58,26 @@ import jadx.core.utils.Utils;
 import jadx.core.utils.exceptions.CodegenException;
 import jadx.core.utils.exceptions.JadxOverflowException;
 
-import static jadx.core.codegen.MethodGen.FallbackOption.BLOCK_DUMP;
-import static jadx.core.codegen.MethodGen.FallbackOption.COMMENTED_DUMP;
-import static jadx.core.codegen.MethodGen.FallbackOption.FALLBACK_MODE;
+import static jadx.core.codegen.common.MethodGenBase.FallbackOption.BLOCK_DUMP;
+import static jadx.core.codegen.common.MethodGenBase.FallbackOption.COMMENTED_DUMP;
+import static jadx.core.codegen.common.MethodGenBase.FallbackOption.FALLBACK_MODE;
 
-public class MethodGen {
-	private static final Logger LOG = LoggerFactory.getLogger(MethodGen.class);
+public abstract class MethodGenBase implements IMethodGen {
+	private static final Logger LOG = LoggerFactory.getLogger(MethodGenBase.class);
 
 	private final MethodNode mth;
-	private final ClassGen classGen;
+	protected final IClassGen classGen;
 	private final AnnotationGen annotationGen;
 	private final NameGen nameGen;
 
-	public MethodGen(ClassGen classGen, MethodNode mth) {
+	protected MethodGenBase(IClassGen classGen, MethodNode mth) {
 		this.mth = mth;
 		this.classGen = classGen;
 		this.annotationGen = classGen.getAnnotationGen();
 		this.nameGen = new NameGen(mth, classGen);
 	}
 
-	public ClassGen getClassGen() {
+	public IClassGen getClassGen() {
 		return classGen;
 	}
 
@@ -83,267 +89,11 @@ public class MethodGen {
 		return mth;
 	}
 
-	public boolean addDefinition(ICodeWriter code) {
-		return classGen.getLang().addMethodDefinition(this, code);
+	protected AnnotationGen getAnnotationGen() {
+		return annotationGen;
 	}
 
-	public boolean addJavaDefinition(ICodeWriter code) {
-		if (mth.getMethodInfo().isClassInit()) {
-			code.startLine();
-			code.attachDefinition(mth);
-			code.add("static");
-			return true;
-		}
-		if (mth.contains(AFlag.ANONYMOUS_CONSTRUCTOR)) {
-			// don't add method name and arguments
-			code.startLine();
-			code.attachDefinition(mth);
-			return false;
-		}
-		if (Consts.DEBUG_USAGE) {
-			ClassGen.addMthUsageInfo(code, mth);
-		}
-		classGen.getLang().addOverride(this, code, mth);
-		annotationGen.addForMethod(code, mth);
-
-		AccessInfo clsAccFlags = mth.getParentClass().getAccessFlags();
-		AccessInfo ai = mth.getAccessFlags();
-		// don't add 'abstract' and 'public' to methods in interface
-		if (clsAccFlags.isInterface()) {
-			ai = ai.remove(AccessFlags.ABSTRACT);
-			ai = ai.remove(AccessFlags.PUBLIC);
-		}
-		// don't add 'public' for annotations
-		if (clsAccFlags.isAnnotation()) {
-			ai = ai.remove(AccessFlags.PUBLIC);
-		}
-		if (mth.getMethodInfo().hasAlias() && !ai.isConstructor()) {
-			CodeGenUtils.addRenamedComment(code, mth, mth.getName());
-		}
-		if (mth.contains(AFlag.INCONSISTENT_CODE) && mth.checkCommentsLevel(CommentsLevel.ERROR)) {
-			code.startLine("/*");
-			code.incIndent();
-			code.startLine("Code decompiled incorrectly, please refer to instructions dump.");
-			if (!mth.root().getArgs().isShowInconsistentCode()) {
-				if (code.isMetadataSupported()) {
-					code.startLine("To view partially-correct code enable 'Show inconsistent code' option in preferences");
-				} else {
-					code.startLine("To view partially-correct add '--show-bad-code' argument");
-				}
-			}
-			code.decIndent();
-			code.startLine("*/");
-		}
-
-		code.startLineWithNum(mth.getSourceLine());
-		code.add(ai.makeString(mth.checkCommentsLevel(CommentsLevel.INFO)));
-		if (clsAccFlags.isInterface() && !mth.isNoCode() && !mth.getAccessFlags().isStatic()) {
-			// add 'default' for method with code in interface
-			code.add("default ");
-		}
-
-		if (classGen.addGenericTypeParameters(code, mth.getTypeParameters(), false)) {
-			code.add(' ');
-		}
-		if (ai.isConstructor()) {
-			code.attachDefinition(mth);
-			code.add(classGen.getClassNode().getShortName()); // constructor
-		} else {
-			classGen.useType(code, mth.getReturnType());
-			code.add(' ');
-			MethodNode defMth = getMethodForDefinition();
-			code.attachDefinition(defMth);
-			code.add(defMth.getAlias());
-		}
-		code.add('(');
-		addMethodArguments(code);
-		code.add(')');
-
-		classGen.getLang().addThrows(annotationGen, mth, code);
-
-		// add default value for annotation class
-		if (mth.getParentClass().getAccessFlags().isAnnotation()) {
-			EncodedValue def = annotationGen.getAnnotationDefaultValue(mth);
-			if (def != null) {
-				code.add(" default ");
-				annotationGen.encodeValue(mth.root(), code, def);
-			}
-		}
-		return true;
-	}
-
-	public boolean addKotlinDefinition(ICodeWriter code) {
-		if (mth.getMethodInfo().isClassInit()) {
-			code.startLine();
-			code.attachDefinition(mth);
-			code.add("init");
-			return true;
-		}
-		if (mth.contains(AFlag.ANONYMOUS_CONSTRUCTOR)) {
-			code.startLine();
-			code.attachDefinition(mth);
-			return false;
-		}
-		if (Consts.DEBUG_USAGE) {
-			ClassGen.addMthUsageInfo(code, mth);
-		}
-		classGen.getLang().addOverride(this, code, mth);
-		annotationGen.addForMethod(code, mth);
-
-		AccessInfo clsAccFlags = mth.getParentClass().getAccessFlags();
-		CodeLanguage lang = classGen.getLang();
-		AccessInfo ai = lang.filterMethodAccess(mth.getAccessFlags(), classGen.isKotlinCompanionGen(), clsAccFlags);
-		if (mth.getMethodInfo().hasAlias() && !ai.isConstructor()) {
-			CodeGenUtils.addRenamedComment(code, mth, mth.getName());
-		}
-		if (mth.contains(AFlag.INCONSISTENT_CODE) && mth.checkCommentsLevel(CommentsLevel.ERROR)) {
-			code.startLine("/*");
-			code.incIndent();
-			code.startLine("Code decompiled incorrectly, please refer to instructions dump.");
-			if (!mth.root().getArgs().isShowInconsistentCode()) {
-				if (code.isMetadataSupported()) {
-					code.startLine("To view partially-correct code enable 'Show inconsistent code' option in preferences");
-				} else {
-					code.startLine("To view partially-correct add '--show-bad-code' argument");
-				}
-			}
-			code.decIndent();
-			code.startLine("*/");
-		}
-
-		code.startLineWithNum(mth.getSourceLine());
-		if (!ai.isConstructor() || classGen.isKotlinCompanionGen()) {
-			code.add(lang.getMethodModifierPrefix(mth));
-			code.add(ai.makeString(mth.checkCommentsLevel(CommentsLevel.INFO)));
-		}
-
-		if (classGen.addGenericTypeParameters(code, mth.getTypeParameters(), false)) {
-			code.add(' ');
-		}
-		if (ai.isConstructor()) {
-			code.attachDefinition(mth);
-			code.add("constructor");
-		} else {
-			code.add("fun ");
-			MethodNode defMth = getMethodForDefinition();
-			code.attachDefinition(defMth);
-			code.add(defMth.getAlias());
-		}
-		code.add('(');
-		addKotlinMethodArguments(code);
-		code.add(')');
-		if (!ai.isConstructor()) {
-			ArgType retType = mth.getReturnType();
-			SuspendFunctionAttr suspendAttr = mth.get(AType.SUSPEND_FUNCTION);
-			if (suspendAttr != null && retType.isObject() && retType.equals(ArgType.OBJECT)) {
-				// JVM suspend bridge returns java.lang.Object
-			} else if (!KotlinTypeGen.isVoid(retType)) {
-				code.add(": ");
-				classGen.useType(code, retType);
-			}
-		}
-
-		lang.addThrows(annotationGen, mth, code);
-
-		if (mth.getParentClass().getAccessFlags().isAnnotation()) {
-			EncodedValue def = annotationGen.getAnnotationDefaultValue(mth);
-			if (def != null) {
-				code.add(" = ");
-				annotationGen.encodeValue(mth.root(), code, def);
-			}
-		}
-		return true;
-	}
-
-	private void addKotlinMethodArguments(ICodeWriter code) {
-		List<RegisterArg> args = mth.getArgRegs();
-		AnnotationMethodParamsAttr paramsAnnotation = mth.get(JadxAttrType.ANNOTATION_MTH_PARAMETERS);
-		int argNum = -1;
-		int paramIdx = -1;
-		int lastArgNum = args.size() - 1;
-		boolean first = true;
-		for (RegisterArg mthArg : args) {
-			argNum++;
-			if (SkipMethodArgsAttr.isSkip(mth, argNum)) {
-				continue;
-			}
-			paramIdx++;
-			if (first) {
-				first = false;
-			} else {
-				code.add(", ");
-			}
-			SSAVar ssaVar = mthArg.getSVar();
-			CodeVar var;
-			if (ssaVar == null) {
-				var = CodeVar.fromMthArg(mthArg, classGen.isFallbackMode());
-			} else {
-				var = ssaVar.getCodeVar();
-			}
-			if (paramsAnnotation != null) {
-				annotationGen.addForParameter(code, paramsAnnotation, argNum);
-			}
-			ArgType argType;
-			ArgType varType = var.getType();
-			if (varType == null || varType == ArgType.UNKNOWN) {
-				argType = mthArg.getInitType();
-			} else {
-				argType = varType;
-			}
-			String varName = nameGen.assignArg(var);
-			if (code.isMetadataSupported() && ssaVar != null) {
-				code.attachDefinition(VarNode.get(mth, var));
-			}
-			code.add(varName);
-			code.add(": ");
-			if (argNum == lastArgNum && mth.getAccessFlags().isVarArgs()) {
-				if (argType.isArray()) {
-					ArgType elType = argType.getArrayElement();
-					classGen.useType(code, elType);
-					code.add("...");
-				} else {
-					mth.addWarnComment("Last argument in varargs method is not array: " + var);
-					classGen.useType(code, argType);
-				}
-			} else {
-				classGen.useType(code, argType);
-			}
-			MethodDefaultParamsAttr defaultParams = mth.get(AType.METHOD_DEFAULT_PARAMS);
-			if (defaultParams != null) {
-				MethodDefaultParamsAttr.DefaultValue defaultValue = defaultParams.getDefault(paramIdx);
-				if (defaultValue != null) {
-					code.add(" = ");
-					try {
-						if (!emitKotlinFieldReadDefault(code, defaultValue.getValueInsn())) {
-							InsnGen insnGen = new InsnGen(new MethodGen(classGen, defaultValue.getSourceMth()), false);
-							insnGen.makeInsn(defaultValue.getValueInsn(), code, InsnGen.Flags.INLINE);
-						}
-					} catch (CodegenException e) {
-						code.add("/* default */");
-					}
-				}
-			}
-		}
-	}
-
-	private boolean emitKotlinFieldReadDefault(ICodeWriter code, InsnNode valueInsn) {
-		if (valueInsn.getType() != InsnType.IGET) {
-			return false;
-		}
-		Object index = ((IndexInsnNode) valueInsn).getIndex();
-		if (!(index instanceof FieldInfo)) {
-			return false;
-		}
-		FieldInfo fieldInfo = (FieldInfo) index;
-		if (!fieldInfo.getDeclClass().equals(mth.getParentClass().getClassInfo())) {
-			return false;
-		}
-		code.add("this.");
-		code.add(fieldInfo.getAlias());
-		return true;
-	}
-
-	private MethodNode getMethodForDefinition() {
+	protected MethodNode getMethodForDefinition() {
 		MethodReplaceAttr replaceAttr = mth.get(AType.METHOD_REPLACE);
 		if (replaceAttr != null) {
 			return replaceAttr.getReplaceMth();
@@ -351,67 +101,8 @@ public class MethodGen {
 		return mth;
 	}
 
-	private void addMethodArguments(ICodeWriter code) {
-		List<RegisterArg> args = mth.getArgRegs();
-		AnnotationMethodParamsAttr paramsAnnotation = mth.get(JadxAttrType.ANNOTATION_MTH_PARAMETERS);
-		int argNum = -1;
-		int lastArgNum = args.size() - 1;
-		boolean first = true;
-		for (RegisterArg mthArg : args) {
-			argNum++;
-			if (SkipMethodArgsAttr.isSkip(mth, argNum)) {
-				continue;
-			}
-			if (first) {
-				first = false;
-			} else {
-				code.add(", ");
-			}
-			SSAVar ssaVar = mthArg.getSVar();
-			CodeVar var;
-			if (ssaVar == null) {
-				// abstract or interface methods
-				var = CodeVar.fromMthArg(mthArg, classGen.isFallbackMode());
-			} else {
-				var = ssaVar.getCodeVar();
-			}
-
-			// add argument annotation
-			if (paramsAnnotation != null) {
-				annotationGen.addForParameter(code, paramsAnnotation, argNum);
-			}
-			if (var.isFinal()) {
-				code.add("final ");
-			}
-			ArgType argType;
-			ArgType varType = var.getType();
-			if (varType == null || varType == ArgType.UNKNOWN) {
-				// occur on decompilation errors
-				argType = mthArg.getInitType();
-			} else {
-				argType = varType;
-			}
-			if (argNum == lastArgNum && mth.getAccessFlags().isVarArgs()) {
-				// change last array argument to varargs
-				if (argType.isArray()) {
-					ArgType elType = argType.getArrayElement();
-					classGen.useType(code, elType);
-					code.add("...");
-				} else {
-					mth.addWarnComment("Last argument in varargs method is not array: " + var);
-					classGen.useType(code, argType);
-				}
-			} else {
-				classGen.useType(code, argType);
-			}
-			code.add(' ');
-			String varName = nameGen.assignArg(var);
-			if (code.isMetadataSupported() && ssaVar != null /* for fallback mode */) {
-				code.attachDefinition(VarNode.get(mth, var));
-			}
-			code.add(varName);
-		}
-	}
+	@Override
+	public abstract boolean addDefinition(ICodeWriter code);
 
 	public void addInstructions(ICodeWriter code) throws CodegenException {
 		JadxArgs args = mth.root().getArgs();
@@ -587,7 +278,7 @@ public class MethodGen {
 
 	public static void addFallbackInsns(ICodeWriter code, MethodNode mth, InsnNode[] insnArr, FallbackOption option) {
 		int startIndent = code.getIndent();
-		MethodGen methodGen = getFallbackMethodGen(mth);
+		MethodGenBase methodGen = (MethodGenBase) getFallbackMethodGen(mth);
 		InsnGen insnGen = new InsnGen(methodGen, true);
 		InsnNode prevInsn = null;
 		for (InsnNode insn : insnArr) {
@@ -699,9 +390,8 @@ public class MethodGen {
 	/**
 	 * Return fallback variant of method codegen
 	 */
-	public static MethodGen getFallbackMethodGen(MethodNode mth) {
-		ClassGen clsGen = new ClassGen(mth.getParentClass(), null, false, true, true, IntegerFormat.AUTO);
-		return new MethodGen(clsGen, mth);
+	public static IMethodGen getFallbackMethodGen(MethodNode mth) {
+		return CodeGenFactory.createFallbackMethodGen(mth);
 	}
 
 	public static String getLabelName(BlockNode block) {

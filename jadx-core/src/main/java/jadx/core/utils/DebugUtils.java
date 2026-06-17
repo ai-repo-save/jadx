@@ -20,7 +20,8 @@ import jadx.api.ICodeWriter;
 import jadx.api.impl.SimpleCodeWriter;
 import jadx.core.codegen.ConditionGen;
 import jadx.core.codegen.InsnGen;
-import jadx.core.codegen.MethodGen;
+import jadx.core.codegen.api.IMethodGen;
+import jadx.core.codegen.common.MethodGenBase;
 import jadx.core.dex.attributes.AType;
 import jadx.core.dex.attributes.IAttributeNode;
 import jadx.core.dex.attributes.nodes.MethodOverrideAttr;
@@ -168,7 +169,7 @@ public class DebugUtils {
 			LoopRegion loop = (LoopRegion) region;
 			IfCondition condition = loop.getCondition();
 			if (printInsns && condition != null) {
-				ConditionGen conditionGen = new ConditionGen(new InsnGen(MethodGen.getFallbackMethodGen(mth), true));
+				ConditionGen conditionGen = new ConditionGen(new InsnGen(MethodGenBase.getFallbackMethodGen(mth), true));
 				cw.startLine(indent).add("|> ");
 				try {
 					conditionGen.add(cw, condition);
@@ -182,7 +183,7 @@ public class DebugUtils {
 	private static void printInsns(MethodNode mth, ICodeWriter cw, String indent, IBlock block) {
 		for (InsnNode insn : block.getInstructions()) {
 			try {
-				MethodGen mg = MethodGen.getFallbackMethodGen(mth);
+				IMethodGen mg = MethodGenBase.getFallbackMethodGen(mth);
 				InsnGen ig = new InsnGen(mg, true);
 				ICodeWriter code = new SimpleCodeWriter();
 				ig.makeInsn(insn, code);

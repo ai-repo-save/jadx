@@ -7,6 +7,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import jadx.core.deobf.NameMapper;
+import jadx.core.codegen.api.IClassGen;
 import jadx.core.dex.attributes.nodes.LoopLabelAttr;
 import jadx.core.dex.instructions.args.CodeVar;
 import jadx.core.dex.instructions.args.NamedArg;
@@ -21,7 +22,7 @@ public class NameGen {
 	private final boolean fallback;
 	private final Set<String> varNames = new HashSet<>();
 
-	public NameGen(MethodNode mth, ClassGen classGen) {
+	public NameGen(MethodNode mth, IClassGen classGen) {
 		this.mth = mth;
 		this.fallback = classGen.isFallbackMode();
 		NameGen outerNameGen = classGen.getOuterNameGen();
