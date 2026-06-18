@@ -100,3 +100,15 @@ val packageMcpRuntime by tasks.registering(com.github.jengelman.gradle.plugins.s
 tasks.test {
 	dependsOn(packageMcpRuntime)
 }
+
+val jadxDevToolArgs: String? by project
+
+tasks.register<JavaExec>("jadxDev") {
+	group = "jadx-dev"
+	description = "Run jadx developer tools (export-smali, dump-cfg, inspect-method, list-visitors)"
+	classpath = sourceSets.main.get().runtimeClasspath
+	mainClass.set("jadx.cli.tools.JadxDev")
+	if (jadxDevToolArgs != null) {
+		args(jadxDevToolArgs!!.trim().split(Regex("\\s+")))
+	}
+}

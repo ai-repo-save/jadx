@@ -44,6 +44,19 @@ JADX is a Dex-to-Java decompiler for Android. The repo ships a CLI (`jadx`) and 
 | Run GUI | `build/jadx/bin/jadx-gui` |
 | CLI version | `build/jadx/bin/jadx --version` |
 
+### Developer tools (regression / debugging)
+
+Scripts in `scripts/` wrap `jadx-dev` (Gradle task `:jadx-cli:jadxDev`). No `dist` build required.
+
+| Task | Command |
+|------|---------|
+| Export smali fixtures | `./scripts/export-smali.sh -i app.apk -o jadx-core/src/test/smali/... -c com.example.Foo` |
+| Dump method CFG (.dot) | `./scripts/dump-cfg.sh -i input -o /tmp/cfg -c Class -m method` |
+| Inspect method output | `./scripts/inspect-method.sh -i input -c Class -m method --insns --errors` |
+| List visitor pass names | `./scripts/jadx-dev.sh list-visitors` |
+
+See `scripts/README.md` for naming modes, `--until-visitor`, and fixture workflow.
+
 Built launchers land in `build/jadx/bin/`. CI also sets `JADX_BUILD_JAVA_VERSION=11` when compiling with a newer JDK; this is optional for local builds on JDK 21.
 
 ### Services
