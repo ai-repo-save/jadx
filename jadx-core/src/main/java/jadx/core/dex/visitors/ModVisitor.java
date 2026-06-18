@@ -414,8 +414,6 @@ public class ModVisitor extends AbstractVisitor {
 		ArgType castType = (ArgType) insn.getIndex();
 		if (!ArgType.isCastNeeded(mth.root(), castArg.getType(), castType)) {
 			RegisterArg result = insn.getResult();
-			result.setType(castArg.getType());
-
 			InsnNode move = new InsnNode(InsnType.MOVE, 1);
 			move.setResult(result);
 			move.addArg(castArg);

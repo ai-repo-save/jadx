@@ -28,7 +28,6 @@ import jadx.core.dex.attributes.nodes.FieldReplaceAttr;
 import jadx.core.dex.attributes.nodes.GenericInfoAttr;
 import jadx.core.dex.attributes.nodes.LoopLabelAttr;
 import jadx.core.dex.attributes.nodes.MethodReplaceAttr;
-import jadx.core.dex.attributes.nodes.SkipMethodArgsAttr;
 import jadx.core.dex.info.ClassInfo;
 import jadx.core.dex.info.FieldInfo;
 import jadx.core.dex.info.MethodInfo;
@@ -66,6 +65,7 @@ import jadx.core.dex.nodes.FieldNode;
 import jadx.core.dex.nodes.InsnNode;
 import jadx.core.dex.nodes.MethodNode;
 import jadx.core.dex.nodes.RootNode;
+import jadx.core.dex.visitors.kotlin.coroutine.KotlinSuspendInvokeCodegen;
 import jadx.core.utils.RegionUtils;
 import jadx.core.utils.exceptions.CodegenException;
 import jadx.core.utils.exceptions.JadxRuntimeException;
@@ -1087,12 +1087,12 @@ public class InsnGen {
 		}
 		int argsCount = insn.getArgsCount();
 		code.add('(');
-		SkipMethodArgsAttr skipAttr = mthNode == null ? null : mthNode.get(AType.SKIP_MTH_ARGS);
 		boolean firstArg = true;
 		if (k < argsCount) {
 			for (int i = k; i < argsCount; i++) {
 				InsnArg arg = insn.getArg(i);
-				if (arg.contains(AFlag.SKIP_ARG) || (skipAttr != null && skipAttr.isSkip(i - startArgNum))) {
+				if (arg.contains(AFlag.SKIP_ARG)
+						|| KotlinSuspendInvokeCodegen.shouldSkipInvokeArg(mth, mthNode, insn, i, startArgNum)) {
 					continue;
 				}
 				if (firstArg) {
@@ -1103,6 +1103,7 @@ public class InsnGen {
 				if (i == argsCount - 1 && processVarArg(code, insn, arg)) {
 					continue;
 				}
+				arg = KotlinSuspendInvokeCodegen.unwrapContinuationThisCast(mth, mthNode, insn, i, arg);
 				addArg(code, arg, false);
 			}
 		}
