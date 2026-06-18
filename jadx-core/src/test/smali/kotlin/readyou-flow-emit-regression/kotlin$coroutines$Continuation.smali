@@ -1,6 +1,17 @@
 .class public interface abstract Lkotlin/coroutines/Continuation;
 .super Ljava/lang/Object;
 
+# annotations
+.annotation system Ldalvik/annotation/Signature;
+    value = {
+        "<T:",
+        "Ljava/lang/Object;",
+        ">",
+        "Ljava/lang/Object;"
+    }
+.end annotation
+
+
 .method public abstract getContext()Lkotlin/coroutines/CoroutineContext;
 .end method
 
